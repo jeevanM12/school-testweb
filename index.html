@@ -1,0 +1,1620 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="https://cdn-icons-png.flaticon.com/512/2995/2995434.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>FeeManager Pro</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        /* Custom Scrollbar for Webkit */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f5f9; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        
+        /* Animations */
+        @keyframes fadeInDown {
+            from { opacity: 0; transform: translate3d(0, -20px, 0); }
+            to { opacity: 1; transform: translate3d(0, 0, 0); }
+        }
+        @keyframes fadeInRight {
+            from { opacity: 0; transform: translate3d(20px, 0, 0); }
+            to { opacity: 1; transform: translate3d(0, 0, 0); }
+        }
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        .animate-fade-in-down { animation: fadeInDown 0.3s ease-out; }
+        .animate-fade-in-right { animation: fadeInRight 0.3s ease-out; }
+        .animate-spin-slow { animation: spin 3s linear infinite; }
+    </style>
+
+    <!-- Import Map for React, Libraries & Gemini API -->
+    <script type="importmap">
+    {
+      "imports": {
+        "react": "https://esm.sh/react@18.2.0",
+        "react-dom": "https://esm.sh/react-dom@18.2.0",
+        "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
+        "react-router-dom": "https://esm.sh/react-router-dom@6.22.3?deps=react@18.2.0,react-dom@18.2.0",
+        "lucide-react": "https://esm.sh/lucide-react@0.363.0?deps=react@18.2.0",
+        "recharts": "https://esm.sh/recharts@2.12.3?deps=react@18.2.0,react-dom@18.2.0",
+        "xlsx": "https://esm.sh/xlsx@0.18.5",
+        "jspdf": "https://esm.sh/jspdf@2.5.1",
+        "jspdf-autotable": "https://esm.sh/jspdf-autotable@3.8.2",
+        "@google/generative-ai": "https://esm.run/@google/generative-ai"
+      }
+    }
+    </script>
+    
+    <!-- Babel for JSX compilation in browser -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+</head>
+<body class="bg-slate-50">
+    <div id="root"></div>
+
+    <script type="text/babel" data-type="module">
+        import React, { useState, useEffect, useMemo, useContext, createContext, useRef } from 'react';
+        import { createRoot } from 'react-dom/client';
+        import { HashRouter, Routes, Route, Link, useNavigate, Navigate, Outlet, useParams, useLocation } from 'react-router-dom';
+        import { 
+            Eye, Edit3, Trash2, PlusCircle, UploadCloud, Download, Search, X, 
+            ChevronUp, ChevronDown, ListFilter, BarChart3, Users, DollarSign, 
+            FileText, Tag, FileDown, BookCopy, UserCog, UserPlus, ShieldCheck, 
+            Lock, KeyRound, LogOut, CalendarDays, CheckCircle, XCircle, Info, 
+            Calendar, ChevronLeft, Save, Sparkles, MessageSquareText, Copy, BrainCircuit,
+            Phone, Unlock
+        } from 'lucide-react';
+        import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+        import * as XLSX from 'xlsx';
+        import jsPDF from 'jspdf';
+        import 'jspdf-autotable';
+        import { GoogleGenerativeAI } from "@google/generative-ai";
+
+        // --- CONSTANTS ---
+        const APP_NAME = "FeeManager Pro";
+        const LOCAL_STORAGE_KEYS = {
+            STUDENTS: 'feeManager_studentsData',
+            USERS: 'feeManager_appUsersData',
+            LOGGED_IN_USER: 'feeManager_loggedInFeeUser'
+        };
+
+        const defaultUserPermissions = {
+            canViewDashboardSummary: true,
+            canViewStudents: true,
+            canAddStudents: false,
+            canEditStudents: false,
+            canDeleteStudents: false,
+            canManagePayments: false,
+            canManageDiscounts: false,
+            canViewReports: false,
+            canImportExport: false,
+            canManageUsers: false,
+        };
+
+        const adminPermissions = {
+            canViewDashboardSummary: true,
+            canViewStudents: true,
+            canAddStudents: true,
+            canEditStudents: true,
+            canDeleteStudents: true,
+            canManagePayments: true,
+            canManageDiscounts: true,
+            canViewReports: true,
+            canImportExport: true,
+            canManageUsers: true,
+        };
+
+        const initialUsers = [
+            { email: 'admin@school.com', password: 'admin', role: 'admin', permissions: adminPermissions },
+            { email: 'user@school.com', password: 'user', role: 'user', permissions: defaultUserPermissions },
+        ];
+
+        const initialStudentsData = [
+            { id: 'S1001', name: 'Amit Kumar', rollNumber: 'R001', class: '10', grade: 'A', phoneNumber: '9876543210', totalFees: 50000, payments: [{ id: 'P1', amount: 20000, date: '2024-07-15T10:30:00Z', remarks: 'First Installment' },{ id: 'P2', amount: 15000, date: '2024-08-20T14:00:00Z', remarks: 'Second Installment' }], discounts: [{ id: 'D1', amount: 2000, reason: 'Sibling Discount', date: '2024-07-10T09:00:00Z' }] },
+            { id: 'S1002', name: 'Priya Sharma', rollNumber: 'R002', class: '12', grade: 'B', phoneNumber: '9123456789', totalFees: 60000, payments: [{ id: 'P3', amount: 30000, date: '2024-07-20T11:00:00Z', remarks: 'Full Payment Attempt 1' }], discounts: [] },
+            { id: 'S1003', name: 'Rahul Singh', rollNumber: 'R003', class: '10', grade: 'A', phoneNumber: '9988776655', totalFees: 50000, payments: [{ id: 'P4', amount: 10000, date: '2024-08-01T12:15:00Z', remarks: 'Partial Payment' }], discounts: [{ id: 'D2', amount: 1000, reason: 'Early Bird', date: '2024-07-05T10:00:00Z' }] },
+        ];
+
+        const ToastType = {
+            Success: 'success',
+            Error: 'error',
+            Info: 'info',
+        };
+
+        // --- GEMINI SERVICE ---
+        const generateAIContent = async (prompt) => {
+            const apiKey = ""; // Provided by environment
+            try {
+                const genAI = new GoogleGenerativeAI(apiKey);
+                const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-preview-09-2025" });
+                const result = await model.generateContent(prompt);
+                return result.response.text();
+            } catch (error) {
+                console.error("Gemini Error:", error);
+                throw new Error("Failed to generate AI content. Please try again.");
+            }
+        };
+
+        // --- UTILS ---
+        const formatDateTime = (isoString) => {
+            if (!isoString) return 'N/A';
+            try {
+                const date = new Date(isoString);
+                if (isNaN(date.getTime())) return 'Invalid Date';
+                return `${date.toLocaleDateString()} ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+            } catch (error) {
+                return 'Invalid Date';
+            }
+        };
+
+        const formatISODateToYMD = (isoString) => {
+            try {
+                const date = new Date(isoString);
+                if (isNaN(date.getTime())) return '';
+                return date.toISOString().split('T')[0];
+            } catch (e) {
+                return '';
+            }
+        };
+
+        const calculateFeeDetails = (student) => {
+            const totalPaid = student.payments.reduce((sum, p) => sum + p.amount, 0);
+            const totalDiscount = student.discounts.reduce((sum, d) => sum + d.amount, 0);
+            const remainingBalance = student.totalFees - totalPaid - totalDiscount;
+            const lastPayment = student.payments.length > 0 ? student.payments.reduce((latest, p) => new Date(p.date) > new Date(latest.date) ? p : latest) : null;
+            return { totalPaid, totalDiscount, remainingBalance, lastPaymentDate: lastPayment ? lastPayment.date : null };
+        };
+
+        // --- DATA SERVICES ---
+        const exportToExcel = (data, filename, sheetname = 'Sheet1') => {
+            try {
+                if (!data || data.length === 0) throw new Error("No data to export.");
+                const worksheet = XLSX.utils.json_to_sheet(data);
+                const workbook = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(workbook, worksheet, sheetname);
+                XLSX.writeFile(workbook, `${filename}.xlsx`);
+                return { success: true };
+            } catch (error) {
+                console.error("Error exporting to Excel:", error);
+                return { success: false, error: error.message || "Unknown error" };
+            }
+        };
+
+        const prepareStudentListForExport = (students) => {
+            const dataToExport = [];
+            students.forEach(student => {
+                const { totalPaid, totalDiscount, remainingBalance } = calculateFeeDetails(student);
+                const baseStudentData = {
+                    'Name': student.name,
+                    'Roll Number': student.rollNumber,
+                    'Class': student.class,
+                    'Grade': student.grade,
+                    'Phone': student.phoneNumber || 'N/A',
+                    'Total Fees': student.totalFees,
+                    'Total Paid (Cumulative)': totalPaid,
+                    'Total Discount (Cumulative)': totalDiscount,
+                    'Balance Due': remainingBalance,
+                };
+                
+                let transactionsAdded = false;
+                student.payments.forEach(p => {
+                    dataToExport.push({ ...baseStudentData, 'Transaction Type': 'Payment', 'Transaction ID': p.id, 'Amount': p.amount, 'Date': formatDateTime(p.date), 'Details': p.remarks || 'N/A' });
+                    transactionsAdded = true;
+                });
+                student.discounts.forEach(d => {
+                    dataToExport.push({ ...baseStudentData, 'Transaction Type': 'Discount', 'Transaction ID': d.id, 'Amount': d.amount, 'Date': formatDateTime(d.date), 'Details': d.reason || 'N/A' });
+                    transactionsAdded = true;
+                });
+                if (!transactionsAdded) {
+                    dataToExport.push({ ...baseStudentData, 'Transaction Type': 'N/A', 'Transaction ID': 'N/A', 'Amount': 'N/A', 'Date': 'N/A', 'Details': 'No transactions' });
+                }
+            });
+            return dataToExport;
+        };
+
+        const exportToPdf = (data, filename) => {
+            try {
+                const doc = new jsPDF.default ? new jsPDF.default() : new jsPDF();
+                
+                doc.text("Student Financial Report", 14, 16);
+                doc.setFontSize(10);
+                doc.text(`Generated on: ${new Date().toLocaleDateString()}`, 14, 22);
+
+                const tableColumn = ["Name", "Roll No.", "Class", "Phone", "Total Fees", "Balance Due"];
+                const tableRows = data.map(student => [
+                    student.name,
+                    student.rollNumber,
+                    student.class,
+                    student.phoneNumber || '-',
+                    `INR ${student.totalFees.toLocaleString()}`,
+                    `INR ${student.remainingBalance.toLocaleString()}`,
+                ]);
+
+                doc.autoTable({
+                    head: [tableColumn],
+                    body: tableRows,
+                    startY: 30,
+                    theme: 'grid',
+                    headStyles: { fillColor: [22, 160, 133] }
+                });
+
+                doc.save(`${filename}.pdf`);
+                return { success: true };
+            } catch (error) {
+                console.error(error);
+                return { success: false, error: error.message };
+            }
+        };
+
+        const exportReportToExcel = (summaryData, classData, filename) => {
+            try {
+                const summarySheet = XLSX.utils.json_to_sheet(summaryData);
+                const classSheet = XLSX.utils.json_to_sheet(classData);
+                const workbook = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(workbook, summarySheet, 'Financial Summary');
+                XLSX.utils.book_append_sheet(workbook, classSheet, 'Class-wise Pending Fees');
+                XLSX.writeFile(workbook, `${filename}.xlsx`);
+                return { success: true };
+            } catch (error) {
+                return { success: false, error: error.message };
+            }
+        };
+
+        const exportReportToPdf = (summaryCards, summaryData, classData, filename) => {
+            try {
+                const doc = new jsPDF.default ? new jsPDF.default() : new jsPDF();
+                doc.text("Financial Report Summary", 14, 16);
+                doc.setFontSize(10);
+                doc.text(`Generated on: ${new Date().toLocaleDateString()}`, 14, 22);
+
+                doc.autoTable({
+                    head: [['Metric', 'Value']],
+                    body: summaryCards.map(c => [c.title, c.isCurrency ? `INR ${c.value.toLocaleString()}` : c.value.toLocaleString()]),
+                    startY: 30,
+                    theme: 'striped',
+                });
+                const firstTableHeight = doc.lastAutoTable.finalY;
+
+                doc.text("Financial Overview Breakdown", 14, firstTableHeight + 15);
+                doc.autoTable({
+                    head: [['Category', 'Amount']],
+                    body: summaryData.map(d => [d.name, `INR ${d.value.toLocaleString()}`]),
+                    startY: firstTableHeight + 20,
+                    theme: 'grid',
+                    headStyles: { fillColor: [22, 160, 133] }
+                });
+                const secondTableHeight = doc.lastAutoTable.finalY;
+
+                doc.text("Pending Fees by Class", 14, secondTableHeight + 15);
+                doc.autoTable({
+                    head: [['Class', 'Pending Amount']],
+                    body: classData.map(d => [d.name, `INR ${d.pending.toLocaleString()}`]),
+                    startY: secondTableHeight + 20,
+                    theme: 'grid',
+                    headStyles: { fillColor: [255, 128, 66] }
+                });
+
+                doc.save(`${filename}.pdf`);
+                return { success: true };
+            } catch (error) {
+                return { success: false, error: error.message };
+            }
+        };
+
+        const exportDailyReportToExcel = (transactions, date) => {
+            try {
+                const dataToExport = transactions.map(t => ({
+                    'Student Name': t.studentName,
+                    'Roll Number': t.rollNumber,
+                    'Transaction Type': t.type,
+                    'Details': t.details,
+                    'Amount (INR)': t.amount,
+                    'Date': formatDateTime(t.date),
+                }));
+                return exportToExcel(dataToExport, `daily_report_${date}`);
+            } catch (error) {
+                return { success: false, error: error.message };
+            }
+        };
+
+        const exportDailyReportToPdf = (transactions, date, summary) => {
+            try {
+                const doc = new jsPDF.default ? new jsPDF.default() : new jsPDF();
+                const formattedDate = new Date(date).toLocaleDateString('en-GB');
+                doc.text(`Daily Financial Report for ${formattedDate}`, 14, 16);
+                
+                doc.autoTable({
+                    body: [
+                        ['Total Collected', `INR ${summary.totalCollected.toLocaleString()}`],
+                        ['Total Discounted', `INR ${summary.totalDiscounted.toLocaleString()}`],
+                    ],
+                    startY: 22,
+                    theme: 'striped',
+                });
+                
+                const tableColumn = ["Student Name", "Roll No.", "Type", "Details", "Amount"];
+                const tableRows = transactions.map(t => [t.studentName, t.rollNumber, t.type, t.details, `INR ${t.amount.toLocaleString()}`]);
+
+                doc.autoTable({
+                    head: [tableColumn],
+                    body: tableRows,
+                    startY: doc.lastAutoTable.finalY + 10,
+                    theme: 'grid',
+                });
+
+                doc.save(`daily_report_${date}.pdf`);
+                return { success: true };
+            } catch (error) {
+                return { success: false, error: error.message };
+            }
+        };
+
+        const exportMonthlyReportToExcel = (dailyData, monthYear, summary) => {
+            try {
+                const summaryData = [
+                    { Metric: 'Total Collected', Amount: summary.totalCollected },
+                    { Metric: 'Total Discounted', Amount: summary.totalDiscounted }
+                ];
+                const dailyExportData = dailyData.map(d => ({ 'Day': d.day, 'Amount Collected (INR)': d.collected }));
+
+                const summarySheet = XLSX.utils.json_to_sheet(summaryData);
+                const dailySheet = XLSX.utils.json_to_sheet(dailyExportData);
+                const workbook = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(workbook, summarySheet, 'Monthly Summary');
+                XLSX.utils.book_append_sheet(workbook, dailySheet, 'Daily Collections');
+                XLSX.writeFile(workbook, `monthly_report_${monthYear}.xlsx`);
+                return { success: true };
+            } catch (error) {
+                return { success: false, error: error.message };
+            }
+        };
+
+        const exportMonthlyReportToPdf = (dailyData, monthYear, summary) => {
+             try {
+                const doc = new jsPDF.default ? new jsPDF.default() : new jsPDF();
+                doc.text(`Monthly Financial Report for ${monthYear}`, 14, 16);
+
+                doc.autoTable({
+                    body: [
+                        ['Total Collected', `INR ${summary.totalCollected.toLocaleString()}`],
+                        ['Total Discounted', `INR ${summary.totalDiscounted.toLocaleString()}`],
+                    ],
+                    startY: 22,
+                    theme: 'striped',
+                });
+                
+                const tableColumn = ["Day of Month", "Amount Collected (INR)"];
+                const tableRows = dailyData.filter(d => d.collected > 0).map(d => [d.day, `INR ${d.collected.toLocaleString()}`]);
+
+                doc.autoTable({
+                    head: [tableColumn],
+                    body: tableRows,
+                    startY: doc.lastAutoTable.finalY + 10,
+                    theme: 'grid',
+                });
+                
+                doc.save(`monthly_report_${monthYear}.pdf`);
+                return { success: true };
+            } catch (error) {
+                return { success: false, error: error.message };
+            }
+        };
+
+        // --- HOOKS ---
+        function useLocalStorage(key, initialValue) {
+            const [storedValue, setStoredValue] = useState(() => {
+                try {
+                    const item = window.localStorage.getItem(key);
+                    return item ? JSON.parse(item) : initialValue;
+                } catch (error) {
+                    console.error(error);
+                    return initialValue;
+                }
+            });
+
+            useEffect(() => {
+                try {
+                    window.localStorage.setItem(key, JSON.stringify(storedValue));
+                } catch (error) {
+                    console.error(error);
+                }
+            }, [key, storedValue]);
+
+            return [storedValue, setStoredValue];
+        }
+
+        // --- CONTEXT ---
+        const AuthContext = createContext(undefined);
+        const DataContext = createContext(undefined);
+        const ToastContext = createContext(undefined);
+
+        const AppProvider = ({ children }) => {
+            const [users, setUsers] = useLocalStorage(LOCAL_STORAGE_KEYS.USERS, initialUsers);
+            const [students, setStudents] = useLocalStorage(LOCAL_STORAGE_KEYS.STUDENTS, initialStudentsData);
+            const [loggedInUser, setLoggedInUser] = useLocalStorage(LOCAL_STORAGE_KEYS.LOGGED_IN_USER, null);
+            const [toasts, setToasts] = useState([]);
+
+            const login = (email, password) => {
+                const user = users.find(u => u.email.toLowerCase() === email.toLowerCase() && u.password === password);
+                if (user) {
+                    setLoggedInUser(user);
+                    addToast('Login successful!', ToastType.Success);
+                    return true;
+                }
+                return false;
+            };
+
+            const logout = () => {
+                setLoggedInUser(null);
+                addToast('You have been logged out.', ToastType.Info);
+            };
+            
+            const removeToast = (id) => {
+                setToasts(prev => prev.filter(toast => toast.id !== id));
+            };
+            
+            const addToast = (message, type = ToastType.Info) => {
+                const id = Date.now();
+                setToasts(prev => [...prev, { id, message, type }]);
+                setTimeout(() => { removeToast(id); }, 2000);
+            };
+
+            const addStudent = (newStudent) => {
+                const studentWithDefaults = { ...newStudent, id: `S${Date.now()}`, payments: [], discounts: [] };
+                setStudents(prev => [...prev, studentWithDefaults]);
+            };
+
+            const updateStudent = (updatedStudent) => {
+                setStudents(prev => prev.map(s => s.id === updatedStudent.id ? updatedStudent : s));
+            };
+            
+            const deleteStudent = (studentId) => {
+                setStudents(prev => prev.filter(s => s.id !== studentId));
+            };
+
+            const addPayment = (studentId, paymentDetails) => {
+                setStudents(prev => prev.map(s => s.id === studentId ? { ...s, payments: [...s.payments, { ...paymentDetails, id: `P${Date.now()}`, date: paymentDetails.date || new Date().toISOString() }] } : s ));
+            };
+
+            const addDiscount = (studentId, discountDetails) => {
+                setStudents(prev => prev.map(s => s.id === studentId ? { ...s, discounts: [...s.discounts, { ...discountDetails, id: `D${Date.now()}`, date: discountDetails.date || new Date().toISOString() }] } : s ));
+            };
+            
+            const updateDiscount = (studentId, updatedDiscount) => {
+                setStudents(prev => prev.map(s => s.id === studentId ? { ...s, discounts: s.discounts.map(d => d.id === updatedDiscount.id ? updatedDiscount : d) } : s));
+            };
+
+            const deleteDiscount = (studentId, discountId) => {
+                setStudents(prev => prev.map(s => s.id === studentId ? { ...s, discounts: s.discounts.filter(d => d.id !== discountId) } : s));
+            };
+
+            const addUser = (newUser) => {
+                if (users.some(u => u.email.toLowerCase() === newUser.email.toLowerCase())) return false;
+                setUsers(prev => [...prev, { ...newUser, role: 'user', permissions: defaultUserPermissions }]);
+                return true;
+            };
+
+            const deleteUser = (email) => {
+                setUsers(prev => prev.filter(user => user.email.toLowerCase() !== email.toLowerCase()));
+            };
+            
+            const updateUserRole = (email, role) => {
+                const userToUpdate = users.find(u => u.email.toLowerCase() === email.toLowerCase());
+                if (userToUpdate && userToUpdate.role === 'admin' && role === 'user') {
+                    const adminCount = users.filter(u => u.role === 'admin').length;
+                    if (adminCount <= 1) { addToast("Cannot demote the last remaining admin.", ToastType.Error); return; }
+                }
+                setUsers(prev => prev.map(user => user.email.toLowerCase() === email.toLowerCase() ? { ...user, role: role, permissions: role === 'admin' ? adminPermissions : defaultUserPermissions } : user));
+                addToast(`User role for ${email} updated to ${role}.`, ToastType.Success);
+            };
+            
+            const updateUserPermissions = (email, permissions) => {
+                setUsers(prevUsers => prevUsers.map(user => user.email === email ? { ...user, permissions } : user));
+                if (loggedInUser && loggedInUser.email === email) { setLoggedInUser(prev => (prev ? { ...prev, permissions } : prev)); }
+            };
+
+            const updateUserPassword = (email, oldPass, newPass) => {
+                const userToUpdate = users.find(u => u.email.toLowerCase() === email.toLowerCase());
+                if (!userToUpdate) return { success: false, message: "User not found." };
+                if (userToUpdate.password !== oldPass) return { success: false, message: "Incorrect current password." };
+                setUsers(users.map(u => u.email.toLowerCase() === email.toLowerCase() ? { ...u, password: newPass } : u));
+                if (loggedInUser && loggedInUser.email.toLowerCase() === email.toLowerCase()) { setLoggedInUser({ ...loggedInUser, password: newPass }); }
+                return { success: true, message: "Password updated successfully." };
+            };
+
+            const importStudents = (importedStudentsArray) => {
+                let newCount = 0;
+                let updatedCount = 0;
+                setStudents(prevStudents => {
+                    const updatedStudentsMap = new Map(prevStudents.map(s => [s.rollNumber.toLowerCase(), { ...s }]));
+                    importedStudentsArray.forEach(importedStudent => {
+                        const rollNumberKey = String(importedStudent.rollNumber || '').toLowerCase();
+                        if (!rollNumberKey) return;
+                        const existingStudent = updatedStudentsMap.get(rollNumberKey);
+                        if (existingStudent) {
+                            updatedStudentsMap.set(rollNumberKey, { ...existingStudent, name: importedStudent.name, class: importedStudent.class, grade: importedStudent.grade, phoneNumber: importedStudent.phoneNumber, totalFees: importedStudent.totalFees });
+                            updatedCount++;
+                        } else {
+                            updatedStudentsMap.set(rollNumberKey, { ...importedStudent, id: `S${Date.now()}${Math.random().toString(36).substring(2, 9)}`, payments: [], discounts: [] });
+                            newCount++;
+                        }
+                    });
+                    return Array.from(updatedStudentsMap.values());
+                });
+                return { newCount, updatedCount };
+            };
+
+            return (
+                <AuthContext.Provider value={{ loggedInUser, login, logout }}>
+                    <DataContext.Provider value={{ students, setStudents, users, setUsers, addStudent, updateStudent, deleteStudent, addPayment, addDiscount, updateDiscount, deleteDiscount, addUser, deleteUser, updateUserRole, updateUserPermissions, importStudents, updateUserPassword }}>
+                        <ToastContext.Provider value={{ addToast, toasts, removeToast }}>
+                            {children}
+                        </ToastContext.Provider>
+                    </DataContext.Provider>
+                </AuthContext.Provider>
+            );
+        };
+
+        const useAuth = () => useContext(AuthContext);
+        const useData = () => useContext(DataContext);
+        const useToast = () => useContext(ToastContext);
+
+        // --- COMPONENTS ---
+
+        const ToastContainer = () => {
+            const { toasts, removeToast } = useToast();
+            const icons = {
+                [ToastType.Success]: <CheckCircle className="text-emerald-500" size={24} />,
+                [ToastType.Error]: <XCircle className="text-red-500" size={24} />,
+                [ToastType.Info]: <Info className="text-sky-500" size={24} />,
+            };
+            const toastColors = {
+                [ToastType.Success]: 'bg-emerald-100 border-emerald-400',
+                [ToastType.Error]: 'bg-red-100 border-red-400',
+                [ToastType.Info]: 'bg-sky-100 border-sky-400',
+            }
+            return (
+                <div className="fixed top-5 right-5 z-[100] space-y-3 w-full max-w-sm">
+                    {toasts.map(toast => (
+                        <div key={toast.id} className={`relative w-full p-4 pr-10 rounded-lg shadow-lg flex items-center gap-4 animate-fade-in-right ${toastColors[toast.type]} border`}>
+                            {icons[toast.type]}
+                            <p className="text-sm text-slate-800 font-medium">{toast.message}</p>
+                            <button onClick={() => removeToast(toast.id)} className="absolute top-1/2 -translate-y-1/2 right-3 text-slate-500 hover:text-slate-800"><X size={18} /></button>
+                        </div>
+                    ))}
+                </div>
+            );
+        };
+
+        const ConfirmationModal = ({ isOpen, onClose, onConfirm, title, message }) => {
+            if (!isOpen) return null;
+            return (
+                <div className="fixed inset-0 bg-slate-900 bg-opacity-75 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white p-8 rounded-lg shadow-xl w-full max-w-sm relative animate-fade-in-down">
+                        <button onClick={onClose} className="absolute top-4 right-4 text-slate-500 hover:text-slate-700"><X size={24} /></button>
+                        <h2 className="text-2xl font-bold text-slate-800 mb-4">{title}</h2>
+                        <p className="text-slate-700 mb-6">{message}</p>
+                        <div className="flex justify-end space-x-4">
+                            <button onClick={onClose} className="bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold py-2 px-4 rounded-lg">Cancel</button>
+                            <button onClick={onConfirm} className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg">Confirm</button>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+        
+        // NEW: AI Result Modal
+        const AIResultModal = ({ isOpen, onClose, title, content, isLoading }) => {
+            if (!isOpen) return null;
+            
+            const handleCopy = () => {
+                navigator.clipboard.writeText(content);
+                // Ideally show a small 'Copied!' hint, but we'll rely on user knowing it worked
+            };
+
+            return (
+                 <div className="fixed inset-0 bg-slate-900 bg-opacity-75 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white p-8 rounded-xl shadow-2xl w-full max-w-2xl relative animate-fade-in-down max-h-[90vh] flex flex-col">
+                        <button onClick={onClose} className="absolute top-4 right-4 text-slate-500 hover:text-slate-700"><X size={24} /></button>
+                        <h2 className="text-2xl font-bold text-slate-800 mb-4 flex items-center">
+                           <Sparkles className="text-indigo-600 mr-2" size={24} /> {title}
+                        </h2>
+                        
+                        <div className="flex-grow overflow-y-auto mb-6 bg-slate-50 p-4 rounded-lg border border-slate-200">
+                            {isLoading ? (
+                                <div className="flex flex-col items-center justify-center py-12">
+                                    <Sparkles className="text-indigo-500 animate-spin-slow mb-4" size={48} />
+                                    <p className="text-slate-600 font-medium animate-pulse">Consulting Gemini AI...</p>
+                                </div>
+                            ) : (
+                                <div className="prose prose-slate max-w-none whitespace-pre-wrap text-slate-700">
+                                    {content}
+                                </div>
+                            )}
+                        </div>
+
+                        {!isLoading && (
+                            <div className="flex justify-end space-x-4">
+                                <button onClick={handleCopy} className="bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 font-bold py-2 px-4 rounded-lg flex items-center transition">
+                                    <Copy size={18} className="mr-2" /> Copy
+                                </button>
+                                <button onClick={onClose} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg transition">
+                                    Close
+                                </button>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+        };
+
+        // NEW: Permissions Modal
+        const PermissionsModal = ({ isOpen, onClose, user, onSave }) => {
+            if (!isOpen || !user) return null;
+            
+            const [localPermissions, setLocalPermissions] = useState(user.permissions);
+
+            const handleToggle = (key) => {
+                setLocalPermissions(prev => ({ ...prev, [key]: !prev[key] }));
+            };
+
+            const handleSave = () => {
+                onSave(user.email, localPermissions);
+                onClose();
+            };
+
+            const permissionLabels = {
+                canViewDashboardSummary: "View Dashboard Summary",
+                canViewStudents: "View Students",
+                canAddStudents: "Add Students",
+                canEditStudents: "Edit Students",
+                canDeleteStudents: "Delete Students",
+                canManagePayments: "Manage Payments",
+                canManageDiscounts: "Manage Discounts",
+                canViewReports: "View Reports",
+                canImportExport: "Import/Export Data",
+                canManageUsers: "Manage Users (Admin)"
+            };
+
+            return (
+                <div className="fixed inset-0 bg-slate-900 bg-opacity-75 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white p-8 rounded-xl shadow-xl w-full max-w-2xl relative animate-fade-in-down">
+                        <button onClick={onClose} className="absolute top-4 right-4 text-slate-500 hover:text-slate-700"><X size={24} /></button>
+                        <h2 className="text-2xl font-bold text-slate-800 mb-2">Edit Permissions</h2>
+                        <p className="text-slate-600 mb-6">For user: <span className="font-semibold">{user.email}</span></p>
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+                            {Object.entries(localPermissions).map(([key, value]) => (
+                                <div key={key} className="flex items-center p-3 border rounded-lg hover:bg-slate-50 cursor-pointer" onClick={() => handleToggle(key)}>
+                                    <div className={`w-5 h-5 rounded border flex items-center justify-center mr-3 ${value ? 'bg-indigo-600 border-indigo-600' : 'border-slate-300 bg-white'}`}>
+                                        {value && <CheckCircle size={14} className="text-white" />}
+                                    </div>
+                                    <span className="text-slate-700 font-medium">{permissionLabels[key] || key}</span>
+                                </div>
+                            ))}
+                        </div>
+
+                        <div className="flex justify-end space-x-4">
+                            <button onClick={onClose} className="bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold py-2 px-4 rounded-lg">Cancel</button>
+                            <button onClick={handleSave} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg">Save Changes</button>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const EmptyState = ({ icon, title, message, actionButton }) => (
+            <div className="text-center bg-white p-12 rounded-xl shadow-lg mt-8">
+                <div className="mx-auto flex items-center justify-center h-20 w-20 rounded-full bg-indigo-100 mb-6">{icon}</div>
+                <h3 className="text-2xl font-bold text-slate-800">{title}</h3>
+                <p className="mt-2 text-slate-600 max-w-md mx-auto">{message}</p>
+                {actionButton && <div className="mt-8">{actionButton}</div>}
+            </div>
+        );
+
+        const AddPaymentModal = ({ student, onClose }) => {
+            const { addPayment } = useData();
+            const { addToast } = useToast();
+            const [amount, setAmount] = useState('');
+            const [remarks, setRemarks] = useState('');
+            const [date, setDate] = useState(formatISODateToYMD(new Date().toISOString()));
+
+            const handleSubmit = (e) => {
+                e.preventDefault();
+                const parsedAmount = parseFloat(amount);
+                if (isNaN(parsedAmount) || parsedAmount <= 0) { addToast('Please enter a valid amount.', ToastType.Error); return; }
+                addPayment(student.id, { amount: parsedAmount, remarks, date: new Date(date).toISOString() });
+                addToast('Payment added successfully', ToastType.Success);
+                onClose();
+            };
+
+            return (
+                <div className="fixed inset-0 bg-slate-900 bg-opacity-75 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white p-8 rounded-lg shadow-xl w-full max-w-md relative animate-fade-in-down">
+                        <h2 className="text-2xl font-bold mb-6">Add Payment for {student.name}</h2>
+                        <form onSubmit={handleSubmit} className="space-y-4">
+                            <div><label className="block text-slate-700 text-sm font-bold mb-2">Amount (INR)</label><input type="number" value={amount} onChange={e => setAmount(e.target.value)} className="shadow appearance-none border rounded w-full py-2 px-3 focus:outline-none focus:ring-2 focus:ring-indigo-500" required /></div>
+                            <div><label className="block text-slate-700 text-sm font-bold mb-2">Date</label><input type="date" value={date} onChange={e => setDate(e.target.value)} className="shadow appearance-none border rounded w-full py-2 px-3 focus:outline-none focus:ring-2 focus:ring-indigo-500" required /></div>
+                            <div><label className="block text-slate-700 text-sm font-bold mb-2">Remarks</label><textarea value={remarks} onChange={e => setRemarks(e.target.value)} className="shadow appearance-none border rounded w-full py-2 px-3 h-24 focus:outline-none focus:ring-2 focus:ring-indigo-500" /></div>
+                            <div className="flex justify-end gap-4 pt-4"><button type="button" onClick={onClose} className="bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold py-2 px-4 rounded-lg">Cancel</button><button type="submit" className="bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-2 px-4 rounded-lg">Add Payment</button></div>
+                        </form>
+                    </div>
+                </div>
+            );
+        };
+
+        const AddDiscountModal = ({ student, onClose }) => {
+            const { addDiscount } = useData();
+            const { addToast } = useToast();
+            const [amount, setAmount] = useState('');
+            const [reason, setReason] = useState('');
+            const [date, setDate] = useState(formatISODateToYMD(new Date().toISOString()));
+
+            const handleSubmit = (e) => {
+                e.preventDefault();
+                const parsedAmount = parseFloat(amount);
+                if (isNaN(parsedAmount) || parsedAmount <= 0) { addToast('Please enter a valid amount.', ToastType.Error); return; }
+                if (!reason.trim()) { addToast('Please enter a reason for the discount.', ToastType.Error); return; }
+                addDiscount(student.id, { amount: parsedAmount, reason, date: new Date(date).toISOString() });
+                addToast('Discount added successfully', ToastType.Success);
+                onClose();
+            };
+
+            return (
+                <div className="fixed inset-0 bg-slate-900 bg-opacity-75 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white p-8 rounded-lg shadow-xl w-full max-w-md relative animate-fade-in-down">
+                        <h2 className="text-2xl font-bold mb-6">Add Discount for {student.name}</h2>
+                        <form onSubmit={handleSubmit} className="space-y-4">
+                            <div><label className="block text-slate-700 text-sm font-bold mb-2">Amount (INR)</label><input type="number" value={amount} onChange={e => setAmount(e.target.value)} className="shadow appearance-none border rounded w-full py-2 px-3 focus:outline-none focus:ring-2 focus:ring-indigo-500" required /></div>
+                            <div><label className="block text-slate-700 text-sm font-bold mb-2">Date</label><input type="date" value={date} onChange={e => setDate(e.target.value)} className="shadow appearance-none border rounded w-full py-2 px-3 focus:outline-none focus:ring-2 focus:ring-indigo-500" required /></div>
+                            <div><label className="block text-slate-700 text-sm font-bold mb-2">Reason</label><textarea value={reason} onChange={e => setReason(e.target.value)} className="shadow appearance-none border rounded w-full py-2 px-3 h-24 focus:outline-none focus:ring-2 focus:ring-indigo-500" required /></div>
+                            <div className="flex justify-end gap-4 pt-4"><button type="button" onClick={onClose} className="bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold py-2 px-4 rounded-lg">Cancel</button><button type="submit" className="bg-amber-500 hover:bg-amber-600 text-white font-bold py-2 px-4 rounded-lg">Add Discount</button></div>
+                        </form>
+                    </div>
+                </div>
+            );
+        };
+
+        const Navbar = () => {
+            const { loggedInUser, logout } = useAuth();
+            const navigate = useNavigate();
+            const [reportsDropdownOpen, setReportsDropdownOpen] = useState(false);
+            const [adminDropdownOpen, setAdminDropdownOpen] = useState(false);
+            const reportsTimeoutRef = useRef(null);
+            const adminTimeoutRef = useRef(null);
+
+            const handleMouseEnter = (setter, timeoutRef) => {
+                if (timeoutRef.current) clearTimeout(timeoutRef.current);
+                setter(true);
+            };
+            const handleMouseLeave = (setter, timeoutRef) => {
+                timeoutRef.current = setTimeout(() => { setter(false); }, 500);
+            };
+            const activeLinkClass = { color: '#818cf8' };
+
+            return (
+                <nav className="bg-slate-900 text-white p-4 shadow-lg">
+                    <div className="container mx-auto flex flex-wrap justify-between items-center">
+                        <h1 className="text-xl md:text-2xl font-bold cursor-pointer mb-2 sm:mb-0" onClick={() => navigate('/')}>
+                            {APP_NAME.split(' ')[0]}<span className="text-indigo-400">{APP_NAME.split(' ')[1]}</span>
+                        </h1>
+                        {loggedInUser && (
+                            <div className="flex flex-wrap items-center space-x-1 sm:space-x-2 md:space-x-3">
+                                <Link to="/" className="hover:text-indigo-300 px-2 py-1 rounded-md text-xs sm:text-sm">Dashboard</Link>
+                                {loggedInUser.permissions.canViewReports && (
+                                    <div className="relative" onMouseEnter={() => handleMouseEnter(setReportsDropdownOpen, reportsTimeoutRef)} onMouseLeave={() => handleMouseLeave(setReportsDropdownOpen, reportsTimeoutRef)}>
+                                        <button className="hover:text-indigo-300 px-2 py-1 rounded-md text-xs sm:text-sm flex items-center">Reports <ChevronDown size={16} className="ml-1"/></button>
+                                        {reportsDropdownOpen && (
+                                            <div className="absolute left-0 mt-1 w-48 bg-slate-800 rounded-md shadow-lg py-1 z-20">
+                                                <Link to="/reports/summary" className="block px-4 py-2 text-xs sm:text-sm text-white hover:bg-slate-700 rounded-md flex items-center"><BarChart3 size={16} className="mr-2"/> Summary</Link>
+                                                <Link to="/reports/daily" className="block px-4 py-2 text-xs sm:text-sm text-white hover:bg-slate-700 rounded-md flex items-center"><CalendarDays size={16} className="mr-2"/> Daily</Link>
+                                                <Link to="/reports/monthly" className="block px-4 py-2 text-xs sm:text-sm text-white hover:bg-slate-700 rounded-md flex items-center"><CalendarDays size={16} className="mr-2"/> Monthly</Link>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                                {loggedInUser.role === 'admin' && (
+                                    <div className="relative" onMouseEnter={() => handleMouseEnter(setAdminDropdownOpen, adminTimeoutRef)} onMouseLeave={() => handleMouseLeave(setAdminDropdownOpen, adminTimeoutRef)}>
+                                        <button className="hover:text-indigo-300 px-2 py-1 rounded-md text-xs sm:text-sm flex items-center">Admin <ChevronDown size={16} className="ml-1"/></button>
+                                        {adminDropdownOpen && (
+                                            <div className="absolute left-0 mt-1 w-52 bg-slate-800 rounded-md shadow-lg py-1 z-20">
+                                                <Link to="/admin/users" className="block px-4 py-2 text-xs sm:text-sm text-white hover:bg-slate-700 rounded-md flex items-center"><UserCog size={16} className="mr-2"/> Users</Link>
+                                                <Link to="/admin/settings" className="block px-4 py-2 text-xs sm:text-sm text-white hover:bg-slate-700 rounded-md flex items-center"><ShieldCheck size={16} className="mr-2"/> Settings</Link>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                                <span className="text-slate-300 text-xs sm:text-sm hidden md:inline">| {loggedInUser.email}</span>
+                                <button onClick={() => { logout(); navigate('/login'); }} className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded-md text-xs sm:text-sm flex items-center"><LogOut size={16} className="mr-1"/> Logout</button>
+                            </div>
+                        )}
+                    </div>
+                </nav>
+            );
+        };
+
+        const MainLayout = () => (
+            <div className="min-h-screen bg-slate-50 font-sans antialiased">
+                <Navbar />
+                <main><Outlet /></main>
+            </div>
+        );
+
+        const ProtectedRoute = ({ children, requiredPermission }) => {
+            const { loggedInUser } = useAuth();
+            if (!loggedInUser) return <Navigate to="/login" replace />;
+            if (requiredPermission && !loggedInUser.permissions[requiredPermission]) return <Navigate to="/" replace />;
+            return children ? children : <Outlet />;
+        };
+
+        // --- PAGES ---
+
+        const LoginPage = () => {
+            const [email, setEmail] = useState('');
+            const [password, setPassword] = useState('');
+            const [showPassword, setShowPassword] = useState(false);
+            const [error, setError] = useState('');
+            const navigate = useNavigate();
+            const { login } = useAuth();
+
+            const handleSubmit = (e) => {
+                e.preventDefault();
+                setError('');
+                if (login(email, password)) navigate('/');
+                else setError('Invalid email or password.');
+            };
+
+            return (
+                <div className="flex items-center justify-center min-h-screen bg-slate-50">
+                    <div className="bg-white p-8 rounded-lg shadow-xl w-full max-w-md m-4">
+                        <h2 className="text-3xl font-bold text-center text-slate-800 mb-6">Login to {APP_NAME.split(' ')[0]}<span className="text-indigo-500">{APP_NAME.split(' ')[1]}</span></h2>
+                        <form onSubmit={handleSubmit}>
+                            <div className="mb-4"><label className="block text-slate-600 text-sm font-bold mb-2">Email</label><input type="email" className="shadow appearance-none border rounded-lg w-full py-3 px-4 text-slate-700 focus:ring-2 focus:ring-indigo-500" value={email} onChange={e => setEmail(e.target.value)} required /></div>
+                            <div className="mb-6"><label className="block text-slate-600 text-sm font-bold mb-2">Password</label><div className="relative"><input type={showPassword ? 'text' : 'password'} className="shadow appearance-none border rounded-lg w-full py-3 px-4 text-slate-700 mb-3 focus:ring-2 focus:ring-indigo-500" value={password} onChange={e => setPassword(e.target.value)} required /><button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-500">{showPassword ? <Eye size={20} /> : <Eye size={20} />}</button></div></div>
+                            {error && <p className="text-red-500 text-center text-sm mb-4">{error}</p>}
+                            <div className="flex items-center justify-between"><button type="submit" className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-lg w-full transform transition duration-150 hover:scale-105">Sign In</button></div>
+                        </form>
+                    </div>
+                </div>
+            );
+        };
+
+        const DashboardPage = () => {
+            const { students, deleteStudent, importStudents } = useData();
+            const { loggedInUser } = useAuth();
+            const { addToast } = useToast();
+            const navigate = useNavigate();
+            const fileInputRef = useRef(null);
+            const [searchTerm, setSearchTerm] = useState('');
+            const [filterClass, setFilterClass] = useState('');
+            const [filterGrade, setFilterGrade] = useState('');
+            const [sortConfig, setSortConfig] = useState({ key: 'name', direction: 'ascending' });
+            const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
+            const [studentToDelete, setStudentToDelete] = useState(null);
+            
+            // AI Insights State
+            const [isAIModalOpen, setIsAIModalOpen] = useState(false);
+            const [aiContent, setAiContent] = useState('');
+            const [isAILoading, setIsAILoading] = useState(false);
+
+            const studentsWithFeeDetails = useMemo(() => students.map(student => ({ ...student, ...calculateFeeDetails(student) })), [students]);
+            const uniqueClasses = useMemo(() => [...new Set(students.map(s => s.class))].sort(), [students]);
+            const uniqueGrades = useMemo(() => [...new Set(students.map(s => s.grade))].sort(), [students]);
+
+            const dashboardSummary = useMemo(() => {
+                const totalFees = studentsWithFeeDetails.reduce((sum, s) => sum + s.totalFees, 0);
+                const totalPaid = studentsWithFeeDetails.reduce((sum, s) => sum + s.totalPaid, 0);
+                const totalDiscount = studentsWithFeeDetails.reduce((sum, s) => sum + s.totalDiscount, 0);
+                const totalPending = studentsWithFeeDetails.reduce((sum, s) => sum + s.remainingBalance, 0);
+                return { totalStudents: students.length, totalFees, totalPaid, totalDiscount, totalPending };
+            }, [studentsWithFeeDetails]);
+
+            const filteredStudents = useMemo(() => studentsWithFeeDetails.filter(s => (s.name.toLowerCase().includes(searchTerm.toLowerCase()) || s.rollNumber.toLowerCase().includes(searchTerm.toLowerCase())) && (filterClass === '' || s.class === filterClass) && (filterGrade === '' || s.grade === filterGrade)), [studentsWithFeeDetails, searchTerm, filterClass, filterGrade]);
+
+            const sortedStudents = useMemo(() => {
+                let sortable = [...filteredStudents];
+                if (sortConfig.key) {
+                    sortable.sort((a, b) => {
+                        if (a[sortConfig.key] < b[sortConfig.key]) return sortConfig.direction === 'ascending' ? -1 : 1;
+                        if (a[sortConfig.key] > b[sortConfig.key]) return sortConfig.direction === 'ascending' ? 1 : -1;
+                        return 0;
+                    });
+                }
+                return sortable;
+            }, [filteredStudents, sortConfig]);
+
+            const requestSort = (key) => setSortConfig({ key, direction: sortConfig.key === key && sortConfig.direction === 'ascending' ? 'descending' : 'ascending' });
+            const getSortIndicator = (key) => sortConfig.key === key ? (sortConfig.direction === 'ascending' ? <ChevronUp className="inline ml-1 h-4 w-4" /> : <ChevronDown className="inline ml-1 h-4 w-4" />) : <ListFilter className="inline ml-1 h-4 w-4 text-slate-400" />;
+
+            const handleExportExcel = () => {
+                if (!loggedInUser?.permissions.canImportExport) return addToast("Permission denied.", ToastType.Error);
+                const data = prepareStudentListForExport(students);
+                if (exportToExcel(data, "student_list").success) addToast("Exported successfully!", ToastType.Success);
+            };
+            const handleExportPdf = () => {
+                if (!loggedInUser?.permissions.canImportExport) return addToast("Permission denied.", ToastType.Error);
+                if (exportToPdf(sortedStudents, "student_financial_report").success) addToast("Exported successfully!", ToastType.Success);
+            };
+            const handleFileImport = (e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (evt) => {
+                    try {
+                        const workbook = XLSX.read(evt.target?.result, { type: 'array' });
+                        const json = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
+                        const imported = json.map(row => ({ 
+                            name: row['Name'], 
+                            rollNumber: String(row['Roll Number'] || row['RollNo'] || ''), 
+                            class: String(row['Class'] || ''), 
+                            grade: String(row['Grade'] || ''), 
+                            phoneNumber: String(row['Phone'] || ''),
+                            totalFees: parseFloat(row['Total Fees']) 
+                        })).filter(s => s.name && s.rollNumber && !isNaN(s.totalFees) && s.totalFees > 0);
+                        
+                        if (imported.length > 0) { 
+                            const { newCount, updatedCount } = importStudents(imported); 
+                            addToast(`Imported ${newCount} new, updated ${updatedCount}.`, ToastType.Success); 
+                        } else {
+                            addToast('No valid data found.', ToastType.Error);
+                        }
+                    } catch (err) { addToast("Failed to process file.", ToastType.Error); } finally { if (fileInputRef.current) fileInputRef.current.value = ""; }
+                };
+                reader.readAsArrayBuffer(file);
+            };
+
+            // NEW: AI Insights Handler
+            const handleGenerateInsights = async () => {
+                setIsAIModalOpen(true);
+                setIsAILoading(true);
+                setAiContent('');
+                try {
+                    const prompt = `
+                        Act as a professional financial analyst for a school.
+                        Analyze the following data:
+                        - Total Students: ${dashboardSummary.totalStudents}
+                        - Total Fees Expected: ${dashboardSummary.totalFees}
+                        - Total Collected: ${dashboardSummary.totalPaid}
+                        - Total Pending: ${dashboardSummary.totalPending}
+                        - Collection Rate: ${((dashboardSummary.totalPaid / dashboardSummary.totalFees) * 100).toFixed(2)}%
+
+                        Please provide:
+                        1. A 3-sentence Executive Summary of the financial health.
+                        2. Three concise, actionable bullet points to improve fee collection efficiency.
+                        
+                        Keep the tone professional and encouraging.
+                    `;
+                    const content = await generateAIContent(prompt);
+                    setAiContent(content);
+                } catch (error) {
+                    setAiContent("Failed to generate insights. Please try again later.");
+                    addToast("AI generation failed", ToastType.Error);
+                } finally {
+                    setIsAILoading(false);
+                }
+            };
+
+            if (students.length === 0) return <div className="container mx-auto p-4"><EmptyState icon={<Users size={48} className="text-indigo-600" />} title="No Student Records" message="Add your first student." actionButton={loggedInUser?.permissions.canAddStudents ? <button onClick={() => navigate('/student/new')} className="bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-3 px-6 rounded-lg flex items-center"><PlusCircle size={22} className="mr-2" /> Add Student</button> : null} /></div>;
+
+            const SummaryCard = ({ title, value, icon, isCurrency, isWarning }) => (
+                <div className="bg-white p-6 rounded-xl shadow-lg flex items-center gap-4 hover:scale-[1.03] transition-all">
+                    <div className={`p-3 rounded-full ${isWarning ? 'bg-red-100 text-red-600' : 'bg-indigo-100 text-indigo-600'}`}>{icon}</div>
+                    <div><p className="text-sm font-medium text-slate-500">{title}</p><p className={`text-2xl font-bold mt-1 ${isWarning ? 'text-red-600' : 'text-slate-800'}`}>{isCurrency ? value.toLocaleString('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }) : value.toLocaleString()}</p></div>
+                </div>
+            );
+
+            return (
+                <div className="container mx-auto p-4 sm:p-6 lg:p-8">
+                    <div className="flex flex-wrap justify-between items-center mb-6 gap-4">
+                        <h2 className="text-3xl font-extrabold text-slate-900 flex items-center"><BarChart3 className="mr-3 text-indigo-600" size={32} /> Dashboard</h2>
+                        {/* NEW: AI Insights Button */}
+                        <button onClick={handleGenerateInsights} className="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-lg shadow-lg hover:shadow-xl flex items-center transition transform hover:-translate-y-0.5">
+                            <Sparkles size={18} className="mr-2" /> AI Financial Insights
+                        </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 mb-8">
+                        <SummaryCard title="Total Students" value={dashboardSummary.totalStudents} icon={<Users size={24} />} />
+                        <SummaryCard title="Unique Classes" value={uniqueClasses.length} icon={<BookCopy size={24} />} />
+                        <SummaryCard title="Total Fees" value={dashboardSummary.totalFees} isCurrency icon={<FileText size={24}/>} />
+                        <SummaryCard title="Total Collected" value={dashboardSummary.totalPaid} isCurrency icon={<DollarSign size={24}/>} />
+                        <SummaryCard title="Total Discount" value={dashboardSummary.totalDiscount} isCurrency icon={<Tag size={24}/>} />
+                        <SummaryCard title="Balance Due" value={dashboardSummary.totalPending} isCurrency isWarning={dashboardSummary.totalPending > 0} icon={<DollarSign size={24}/>} />
+                    </div>
+                    <div className="bg-white p-6 rounded-xl shadow-lg mb-8">
+                        <div className="flex flex-wrap justify-between gap-4 mb-6">
+                            <h3 className="text-xl font-semibold text-slate-800">Student Records</h3>
+                            <div className="flex flex-wrap gap-3">
+                                {loggedInUser?.permissions.canAddStudents && <button onClick={() => navigate('/student/new')} className="bg-emerald-500 hover:bg-emerald-600 text-white font-semibold py-2 px-4 rounded-lg flex items-center"><PlusCircle size={20} className="mr-2" /> Add Student</button>}
+                                {loggedInUser?.permissions.canImportExport && <><input type="file" ref={fileInputRef} onChange={handleFileImport} className="hidden" accept=".xlsx, .xls" /><button onClick={() => fileInputRef.current?.click()} className="bg-indigo-500 text-white font-semibold py-2 px-4 rounded-lg flex items-center"><UploadCloud size={20} className="mr-2" /> Import</button><button onClick={handleExportExcel} className="bg-sky-600 text-white font-semibold py-2 px-4 rounded-lg flex items-center"><Download size={20} className="mr-2" /> Excel</button><button onClick={handleExportPdf} className="bg-teal-600 text-white font-semibold py-2 px-4 rounded-lg flex items-center"><FileDown size={20} className="mr-2" /> PDF</button></>}
+                            </div>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                            <div className="relative flex-grow"><Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={20} /><input type="text" placeholder="Search name/roll..." className="pl-10 pr-4 py-2 border rounded-lg w-full" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}/>{searchTerm && <button onClick={() => setSearchTerm('')} className="absolute right-3 top-1/2 -translate-y-1/2"><X size={18} /></button>}</div>
+                            <select className="px-4 py-2 border rounded-lg" value={filterClass} onChange={(e) => setFilterClass(e.target.value)}><option value="">All Classes</option>{uniqueClasses.map(c => <option key={c} value={c}>Class {c}</option>)}</select>
+                            <select className="px-4 py-2 border rounded-lg" value={filterGrade} onChange={(e) => setFilterGrade(e.target.value)}><option value="">All Grades</option>{uniqueGrades.map(g => <option key={g} value={g}>Grade {g}</option>)}</select>
+                        </div>
+                    </div>
+                    <div className="bg-white p-6 rounded-xl shadow-lg overflow-x-auto">
+                        <table className="min-w-full divide-y divide-slate-200">
+                            <thead className="bg-slate-50"><tr>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase cursor-pointer" onClick={() => requestSort('name')}>Name {getSortIndicator('name')}</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase cursor-pointer" onClick={() => requestSort('rollNumber')}>Roll No. {getSortIndicator('rollNumber')}</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase cursor-pointer" onClick={() => requestSort('class')}>Class {getSortIndicator('class')}</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase cursor-pointer" onClick={() => requestSort('totalFees')}>Fees {getSortIndicator('totalFees')}</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase cursor-pointer" onClick={() => requestSort('remainingBalance')}>Balance {getSortIndicator('remainingBalance')}</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Actions</th>
+                            </tr></thead>
+                            <tbody className="bg-white divide-y divide-slate-200">{sortedStudents.length > 0 ? sortedStudents.map(s => (
+                                <tr key={s.id} className="hover:bg-slate-50">
+                                    <td className="px-6 py-4 text-sm font-medium text-slate-800">{s.name}</td>
+                                    <td className="px-6 py-4 text-sm text-slate-600">{s.rollNumber}</td>
+                                    <td className="px-6 py-4 text-sm text-slate-600">{s.class}</td>
+                                    <td className="px-6 py-4 text-sm text-slate-600">INR {s.totalFees.toLocaleString()}</td>
+                                    <td className={`px-6 py-4 text-sm font-semibold ${s.remainingBalance > 0 ? 'text-red-600' : 'text-emerald-600'}`}>INR {s.remainingBalance.toLocaleString()}</td>
+                                    <td className="px-6 py-4 text-sm font-medium flex space-x-2">
+                                        <button onClick={() => navigate(`/student/${s.id}`)} className="text-sky-600 hover:text-sky-800" title="View"><Eye size={20} /></button>
+                                        {loggedInUser.permissions.canEditStudents && <button onClick={() => navigate(`/student/${s.id}/edit`)} className="text-indigo-600 hover:text-indigo-900" title="Edit"><Edit3 size={20} /></button>}
+                                        {loggedInUser.permissions.canDeleteStudents && <button onClick={() => { setStudentToDelete(s.id); setIsConfirmModalOpen(true); }} className="text-red-600 hover:text-red-900" title="Delete"><Trash2 size={20} /></button>}
+                                    </td>
+                                </tr>
+                            )) : <tr><td colSpan={6} className="px-6 py-4 text-center text-slate-500">No students found.</td></tr>}</tbody>
+                        </table>
+                    </div>
+                    <ConfirmationModal isOpen={isConfirmModalOpen} onClose={() => setIsConfirmModalOpen(false)} onConfirm={() => { deleteStudent(studentToDelete); addToast("Deleted.", ToastType.Success); setIsConfirmModalOpen(false); }} title="Confirm Deletion" message="Are you sure you want to delete this student?" />
+                    
+                    {/* AI Modal */}
+                    <AIResultModal 
+                        isOpen={isAIModalOpen} 
+                        onClose={() => setIsAIModalOpen(false)} 
+                        title="AI Financial Insights" 
+                        content={aiContent} 
+                        isLoading={isAILoading} 
+                    />
+                </div>
+            );
+        };
+
+        const StudentAddPage = () => {
+            const navigate = useNavigate();
+            const { addStudent, students } = useData();
+            const { addToast } = useToast();
+            const [form, setForm] = useState({ name: '', rollNumber: '', class: '', grade: '', phoneNumber: '', totalFees: '' });
+
+            const handleSubmit = (e) => {
+                e.preventDefault();
+                if (!form.name || !form.rollNumber || !form.class || !form.grade || !form.totalFees) return addToast("All fields required.", ToastType.Error);
+                if (students.some(s => s.rollNumber.toLowerCase() === form.rollNumber.toLowerCase().trim())) return addToast("Roll number exists.", ToastType.Error);
+                addStudent({ 
+                    name: form.name.trim(), 
+                    rollNumber: form.rollNumber.trim(), 
+                    class: form.class.trim(), 
+                    grade: form.grade.trim(), 
+                    phoneNumber: form.phoneNumber.trim(),
+                    totalFees: parseFloat(form.totalFees) 
+                });
+                addToast('Student added!', ToastType.Success);
+                navigate('/');
+            };
+            const handleChange = (e) => setForm({ ...form, [e.target.id]: e.target.value });
+
+            return (
+                <div className="container mx-auto p-4 sm:p-8">
+                    <button onClick={() => navigate('/')} className="mb-6 flex items-center text-indigo-600 font-semibold"><ChevronLeft size={20} className="mr-2" /> Back</button>
+                    <div className="bg-white p-8 rounded-xl shadow-lg max-w-2xl mx-auto">
+                        <h2 className="text-2xl font-bold text-slate-800 mb-6 flex items-center"><UserPlus size={24} className="mr-3 text-emerald-600" /> Add Student</h2>
+                        <form onSubmit={handleSubmit} className="space-y-4">
+                            <div><label className="block font-bold mb-1 text-sm text-slate-600">Roll Number</label><input type="text" id="rollNumber" value={form.rollNumber} onChange={handleChange} className="border rounded w-full py-2 px-3 focus:ring-2 focus:ring-indigo-500" required /></div>
+                            <div><label className="block font-bold mb-1 text-sm text-slate-600">Name</label><input type="text" id="name" value={form.name} onChange={handleChange} className="border rounded w-full py-2 px-3 focus:ring-2 focus:ring-indigo-500" required /></div>
+                            <div><label className="block font-bold mb-1 text-sm text-slate-600">Class</label><input type="text" id="class" value={form.class} onChange={handleChange} className="border rounded w-full py-2 px-3 focus:ring-2 focus:ring-indigo-500" required /></div>
+                            <div><label className="block font-bold mb-1 text-sm text-slate-600">Grade</label><input type="text" id="grade" value={form.grade} onChange={handleChange} className="border rounded w-full py-2 px-3 focus:ring-2 focus:ring-indigo-500" required /></div>
+                            <div><label className="block font-bold mb-1 text-sm text-slate-600">Phone Number</label><input type="tel" id="phoneNumber" value={form.phoneNumber} onChange={handleChange} className="border rounded w-full py-2 px-3 focus:ring-2 focus:ring-indigo-500" /></div>
+                            <div><label className="block font-bold mb-1 text-sm text-slate-600">Total Fees</label><input type="number" id="totalFees" value={form.totalFees} onChange={handleChange} className="border rounded w-full py-2 px-3 focus:ring-2 focus:ring-indigo-500" required min="1" /></div>
+                            <div className="pt-4 flex justify-end"><button type="submit" className="bg-emerald-600 text-white font-bold py-2 px-4 rounded hover:bg-emerald-700">Add Student</button></div>
+                        </form>
+                    </div>
+                </div>
+            );
+        };
+
+        const StudentEditPage = () => {
+            const { id } = useParams();
+            const navigate = useNavigate();
+            const { students, updateStudent } = useData();
+            const { addToast } = useToast();
+            const [student, setStudent] = useState(null);
+
+            useEffect(() => {
+                const s = students.find(st => st.id === id);
+                if (s) setStudent(s); else { addToast('Not found', ToastType.Error); navigate('/'); }
+            }, [id, students]);
+
+            const handleSubmit = (e) => {
+                e.preventDefault();
+                if (!student.name || !student.class || !student.grade || student.totalFees <= 0) return addToast("Invalid data", ToastType.Error);
+                updateStudent(student);
+                addToast('Updated!', ToastType.Success);
+                navigate(`/student/${id}`);
+            };
+
+            if (!student) return <div className="p-8">Loading...</div>;
+
+            return (
+                <div className="container mx-auto p-4 sm:p-8">
+                    <button onClick={() => navigate(`/student/${id}`)} className="mb-6 flex items-center text-indigo-600 font-semibold"><ChevronLeft size={20} className="mr-2" /> Back</button>
+                    <div className="bg-white p-8 rounded-xl shadow-lg max-w-2xl mx-auto">
+                        <h2 className="text-2xl font-bold text-slate-800 mb-6">Edit Student</h2>
+                        <form onSubmit={handleSubmit} className="space-y-4">
+                             <div><label className="block font-bold mb-1 text-sm text-slate-600">Roll Number (Read-only)</label><input type="text" value={student.rollNumber} className="border rounded w-full py-2 px-3 bg-slate-100" readOnly /></div>
+                             <div><label className="block font-bold mb-1 text-sm text-slate-600">Name</label><input type="text" value={student.name} onChange={e => setStudent({...student, name: e.target.value})} className="border rounded w-full py-2 px-3" required /></div>
+                             <div><label className="block font-bold mb-1 text-sm text-slate-600">Class</label><input type="text" value={student.class} onChange={e => setStudent({...student, class: e.target.value})} className="border rounded w-full py-2 px-3" required /></div>
+                             <div><label className="block font-bold mb-1 text-sm text-slate-600">Grade</label><input type="text" value={student.grade} onChange={e => setStudent({...student, grade: e.target.value})} className="border rounded w-full py-2 px-3" required /></div>
+                             <div><label className="block font-bold mb-1 text-sm text-slate-600">Phone Number</label><input type="tel" value={student.phoneNumber || ''} onChange={e => setStudent({...student, phoneNumber: e.target.value})} className="border rounded w-full py-2 px-3" /></div>
+                             <div><label className="block font-bold mb-1 text-sm text-slate-600">Fees</label><input type="number" value={student.totalFees} onChange={e => setStudent({...student, totalFees: parseFloat(e.target.value)})} className="border rounded w-full py-2 px-3" required /></div>
+                             <div className="pt-4 flex justify-end"><button type="submit" className="bg-indigo-600 text-white font-bold py-2 px-4 rounded hover:bg-indigo-700">Save Changes</button></div>
+                        </form>
+                    </div>
+                </div>
+            );
+        };
+
+        const StudentDetailPage = () => {
+            const { id } = useParams();
+            const navigate = useNavigate();
+            const { students } = useData();
+            const { loggedInUser } = useAuth();
+            const { addToast } = useToast();
+            const [student, setStudent] = useState(null);
+            const [modal, setModal] = useState(null);
+
+            // AI Reminder State
+            const [isAIModalOpen, setIsAIModalOpen] = useState(false);
+            const [aiContent, setAiContent] = useState('');
+            const [isAILoading, setIsAILoading] = useState(false);
+
+            useEffect(() => {
+                const s = students.find(st => st.id === id);
+                if (s) setStudent(s); else navigate('/404');
+            }, [id, students]);
+            
+            // NEW: AI Reminder Handler
+            const handleGenerateReminder = async () => {
+                if (!student) return;
+                const { remainingBalance } = calculateFeeDetails(student);
+                
+                if (remainingBalance <= 0) {
+                    addToast("No pending balance to remind about.", ToastType.Info);
+                    return;
+                }
+
+                setIsAIModalOpen(true);
+                setIsAILoading(true);
+                setAiContent('');
+                
+                try {
+                    const prompt = `
+                        Act as a polite school administrator.
+                        Write a fee payment reminder message to the parents of the following student:
+                        - Student Name: ${student.name}
+                        - Roll Number: ${student.rollNumber}
+                        - Class: ${student.class}
+                        - Phone: ${student.phoneNumber || 'N/A'}
+                        - Outstanding Balance: INR ${remainingBalance}
+                        
+                        Format: suitable for WhatsApp or Email.
+                        Tone: Polite, professional, and firm but kind.
+                        Length: Under 150 words.
+                    `;
+                    const content = await generateAIContent(prompt);
+                    setAiContent(content);
+                } catch (error) {
+                    setAiContent("Failed to draft reminder. Please try again later.");
+                    addToast("AI drafting failed", ToastType.Error);
+                } finally {
+                    setIsAILoading(false);
+                }
+            };
+
+            if (!student) return <div className="p-8 text-center">Loading...</div>;
+            const { totalPaid, totalDiscount, remainingBalance } = calculateFeeDetails(student);
+            const history = [...student.payments.map(p => ({...p, type: 'Payment'})), ...student.discounts.map(d => ({...d, type: 'Discount'}))].sort((a,b) => new Date(b.date) - new Date(a.date));
+
+            return (
+                <div className="container mx-auto p-4 sm:p-8">
+                    <button onClick={() => navigate('/')} className="mb-6 flex items-center text-indigo-600 font-semibold"><ChevronLeft size={20} className="mr-2" /> Dashboard</button>
+                    <div className="bg-white p-6 rounded-xl shadow-lg mb-8">
+                        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-4">
+                            <div>
+                                <h2 className="text-3xl font-extrabold text-slate-900 mb-2">{student.name}</h2>
+                                <div className="text-slate-600 space-x-4 flex flex-wrap">
+                                    <span>Roll: {student.rollNumber}</span>
+                                    <span>Class: {student.class}</span>
+                                    {student.phoneNumber && <span className="flex items-center"><Phone size={14} className="mr-1"/> {student.phoneNumber}</span>}
+                                </div>
+                            </div>
+                            {loggedInUser?.permissions.canEditStudents && <button onClick={() => navigate(`/student/${id}/edit`)} className="bg-indigo-500 text-white px-4 py-2 rounded shadow mt-4 md:mt-0">Edit</button>}
+                        </div>
+                    </div>
+                    
+                    <div className="bg-white p-6 rounded-xl shadow-lg mb-8 grid grid-cols-1 md:grid-cols-4 gap-4">
+                        <div className="p-4 bg-sky-50 rounded"><p className="font-medium">Fees</p><p className="text-xl font-bold text-sky-700">₹{student.totalFees}</p></div>
+                        <div className="p-4 bg-emerald-50 rounded"><p className="font-medium">Paid</p><p className="text-xl font-bold text-emerald-700">₹{totalPaid}</p></div>
+                        <div className="p-4 bg-amber-50 rounded"><p className="font-medium">Discount</p><p className="text-xl font-bold text-amber-700">₹{totalDiscount}</p></div>
+                        <div className={`p-4 rounded ${remainingBalance > 0 ? 'bg-red-50' : 'bg-emerald-50'}`}><p className="font-medium">Due</p><p className={`text-xl font-bold ${remainingBalance > 0 ? 'text-red-700' : 'text-emerald-700'}`}>₹{remainingBalance}</p></div>
+                    </div>
+                    
+                    {/* NEW: Reminder Button Area */}
+                     {remainingBalance > 0 && (
+                        <div className="bg-purple-50 border border-purple-100 p-4 rounded-xl shadow-sm mb-8 flex items-center justify-between">
+                            <div>
+                                <h4 className="font-bold text-purple-900 flex items-center"><BrainCircuit size={18} className="mr-2"/> AI Actions</h4>
+                                <p className="text-sm text-purple-700">Use AI to draft a professional payment reminder for this student.</p>
+                            </div>
+                            <button onClick={handleGenerateReminder} className="bg-purple-600 hover:bg-purple-700 text-white font-semibold py-2 px-4 rounded-lg shadow flex items-center transition">
+                                <Sparkles size={16} className="mr-2" /> Draft Reminder
+                            </button>
+                        </div>
+                    )}
+
+                    <div className="bg-white p-6 rounded-xl shadow-lg">
+                        <div className="flex justify-between items-center mb-4"><h3 className="text-xl font-semibold">Transactions</h3><div className="flex gap-2">{loggedInUser?.permissions.canManagePayments && <button onClick={() => setModal('payment')} className="bg-emerald-500 text-white px-3 py-1 rounded text-sm">Add Payment</button>}{loggedInUser?.permissions.canManageDiscounts && <button onClick={() => setModal('discount')} className="bg-amber-500 text-white px-3 py-1 rounded text-sm">Add Discount</button>}</div></div>
+                        <table className="min-w-full">
+                            <thead className="bg-slate-50"><tr><th className="px-4 py-2 text-left">Date</th><th className="px-4 py-2 text-left">Type</th><th className="px-4 py-2 text-left">Details</th><th className="px-4 py-2 text-right">Amount</th></tr></thead>
+                            <tbody>{history.map((t, i) => (<tr key={i} className="border-t"><td className="px-4 py-2 text-sm">{formatDateTime(t.date)}</td><td className="px-4 py-2"><span className={`px-2 py-0.5 rounded text-xs ${t.type === 'Payment' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>{t.type}</span></td><td className="px-4 py-2 text-sm">{t.remarks || t.reason}</td><td className="px-4 py-2 text-right font-bold text-sm">₹{t.amount}</td></tr>))}</tbody>
+                        </table>
+                    </div>
+                    {modal === 'payment' && <AddPaymentModal student={student} onClose={() => setModal(null)} />}
+                    {modal === 'discount' && <AddDiscountModal student={student} onClose={() => setModal(null)} />}
+                    
+                    {/* AI Modal */}
+                    <AIResultModal 
+                        isOpen={isAIModalOpen} 
+                        onClose={() => setIsAIModalOpen(false)} 
+                        title="Draft Fee Reminder" 
+                        content={aiContent} 
+                        isLoading={isAILoading} 
+                    />
+                </div>
+            );
+        };
+
+        const ReportsPage = () => {
+            const { students } = useData();
+            const { addToast } = useToast();
+            const reportsData = useMemo(() => {
+                const s = students.map(st => ({ ...st, ...calculateFeeDetails(st) }));
+                const classWise = s.reduce((acc, st) => {
+                    if (!acc[st.class]) acc[st.class] = { name: `Class ${st.class}`, pending: 0 };
+                    acc[st.class].pending += st.remainingBalance;
+                    return acc;
+                }, {});
+                return {
+                    financialOverview: [
+                        { name: 'Collected', value: s.reduce((sum, st) => sum + st.totalPaid, 0) },
+                        { name: 'Discounted', value: s.reduce((sum, st) => sum + st.totalDiscount, 0) },
+                        { name: 'Pending', value: s.reduce((sum, st) => sum + st.remainingBalance, 0) },
+                    ],
+                    classWisePending: Object.values(classWise),
+                };
+            }, [students]);
+
+            const COLORS = ['#10b981', '#f59e0b', '#ef4444'];
+
+            const handleExportExcel = () => {
+                const classDataForExport = reportsData.classWisePending.map(c => ({
+                    'Class': c.name,
+                    'Pending Amount (INR)': c.pending
+                }));
+                const summaryDataForExport = reportsData.financialOverview.map(s => ({
+                    'Category': s.name,
+                    'Amount (INR)': s.value
+                }));
+                const result = exportReportToExcel(summaryDataForExport, classDataForExport, "financial_summary_report");
+                if (result.success) addToast("Exported to Excel!", ToastType.Success);
+            };
+
+            const handleExportPdf = () => {
+                const summaryCards = [
+                    { title: "Collected", value: reportsData.financialOverview[0].value, isCurrency: true },
+                    { title: "Pending", value: reportsData.financialOverview[2].value, isCurrency: true }
+                ];
+                const result = exportReportToPdf(summaryCards, reportsData.financialOverview, reportsData.classWisePending, "financial_summary_report");
+                if (result.success) addToast("Exported to PDF!", ToastType.Success);
+            };
+
+            return (
+                <div className="container mx-auto p-4 sm:p-8">
+                    <div className="flex justify-between items-center mb-6">
+                        <h2 className="text-3xl font-bold text-slate-900">Financial Reports</h2>
+                        <div className="flex gap-2">
+                            <button onClick={handleExportExcel} className="bg-sky-600 text-white px-3 py-2 rounded flex items-center"><Download size={18} className="mr-2"/> Excel</button>
+                            <button onClick={handleExportPdf} className="bg-teal-600 text-white px-3 py-2 rounded flex items-center"><FileDown size={18} className="mr-2"/> PDF</button>
+                        </div>
+                    </div>
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                        <div className="bg-white p-6 rounded-xl shadow-lg">
+                            <h3 className="text-xl font-semibold mb-4">Overview</h3>
+                            <ResponsiveContainer width="100%" height={300}><PieChart><Pie data={reportsData.financialOverview} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} fill="#8884d8" label>{reportsData.financialOverview.map((e, i) => <Cell key={`cell-${i}`} fill={COLORS[i % COLORS.length]} />)}</Pie><Tooltip /><Legend /></PieChart></ResponsiveContainer>
+                        </div>
+                        <div className="bg-white p-6 rounded-xl shadow-lg">
+                            <h3 className="text-xl font-semibold mb-4">Pending by Class</h3>
+                            <ResponsiveContainer width="100%" height={300}><BarChart data={reportsData.classWisePending}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="name" /><YAxis /><Tooltip /><Legend /><Bar dataKey="pending" fill="#f59e0b" /></BarChart></ResponsiveContainer>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const DailyReportPage = () => {
+            const { students } = useData();
+            const { addToast } = useToast();
+            const [date, setDate] = useState(formatISODateToYMD(new Date().toISOString()));
+            
+            const data = useMemo(() => {
+                const txns = [];
+                const target = new Date(date);
+                target.setHours(0,0,0,0);
+                let collected = 0, discounted = 0;
+                students.forEach(s => {
+                    s.payments.forEach(p => {
+                        const pd = new Date(p.date);
+                        if (pd.toDateString() === target.toDateString()) { txns.push({...p, studentName: s.name, rollNumber: s.rollNumber, type: 'Payment', details: p.remarks}); collected += p.amount; }
+                    });
+                    s.discounts.forEach(d => {
+                        const dd = new Date(d.date);
+                        if (dd.toDateString() === target.toDateString()) { txns.push({...d, studentName: s.name, rollNumber: s.rollNumber, type: 'Discount', details: d.reason}); discounted += d.amount; }
+                    });
+                });
+                return { txns, collected, discounted };
+            }, [students, date]);
+
+            const handleExportExcel = () => {
+                if (data.txns.length === 0) return addToast("No data to export", ToastType.Info);
+                exportDailyReportToExcel(data.txns, date);
+                addToast("Exported to Excel!", ToastType.Success);
+            };
+
+            const handleExportPdf = () => {
+                if (data.txns.length === 0) return addToast("No data to export", ToastType.Info);
+                const summary = { totalCollected: data.collected, totalDiscounted: data.discounted };
+                exportDailyReportToPdf(data.txns, date, summary);
+                addToast("Exported to PDF!", ToastType.Success);
+            };
+
+            return (
+                <div className="container mx-auto p-4 sm:p-8">
+                    <div className="flex justify-between items-center mb-6">
+                        <h2 className="text-3xl font-bold">Daily Report</h2>
+                        <div className="flex gap-2">
+                            <button onClick={handleExportExcel} className="bg-sky-600 text-white px-3 py-2 rounded flex items-center"><Download size={18} className="mr-2"/> Excel</button>
+                            <button onClick={handleExportPdf} className="bg-teal-600 text-white px-3 py-2 rounded flex items-center"><FileDown size={18} className="mr-2"/> PDF</button>
+                        </div>
+                    </div>
+                    <div className="bg-white p-6 rounded-xl shadow-lg mb-6 flex items-center gap-4"><label>Select Date:</label><input type="date" value={date} onChange={e => setDate(e.target.value)} className="border p-2 rounded" /></div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                         <div className="bg-white p-6 rounded-xl shadow-lg"><p className="text-slate-500">Collected Today</p><p className="text-2xl font-bold text-emerald-600">₹{data.collected}</p></div>
+                         <div className="bg-white p-6 rounded-xl shadow-lg"><p className="text-slate-500">Discounted Today</p><p className="text-2xl font-bold text-amber-600">₹{data.discounted}</p></div>
+                    </div>
+                    <div className="bg-white p-6 rounded-xl shadow-lg"><h3 className="font-bold mb-4">Transactions</h3>
+                        <table className="min-w-full"><thead><tr><th className="text-left p-2">Student</th><th className="text-left p-2">Type</th><th className="text-right p-2">Amount</th></tr></thead><tbody>{data.txns.map((t, i) => <tr key={i} className="border-t"><td className="p-2">{t.studentName}</td><td className="p-2">{t.type}</td><td className="p-2 text-right">₹{t.amount}</td></tr>)}</tbody></table>
+                    </div>
+                </div>
+            );
+        };
+
+        const MonthlyReportPage = () => {
+            const { students } = useData();
+            const { addToast } = useToast();
+            const [month, setMonth] = useState(new Date().getMonth());
+            const [year, setYear] = useState(new Date().getFullYear());
+            
+            const data = useMemo(() => {
+                const days = new Date(year, month + 1, 0).getDate();
+                const daily = Array.from({length: days}, (_, i) => ({ day: i + 1, collected: 0 }));
+                let total = 0;
+                let totalDisc = 0;
+                students.forEach(s => {
+                    s.payments.forEach(p => {
+                        const d = new Date(p.date);
+                        if (d.getMonth() === month && d.getFullYear() === year) {
+                            daily[d.getDate() - 1].collected += p.amount;
+                            total += p.amount;
+                        }
+                    });
+                    s.discounts.forEach(d => {
+                        const dd = new Date(d.date);
+                        if (dd.getMonth() === month && dd.getFullYear() === year) totalDisc += d.amount;
+                    });
+                });
+                return { daily, total, totalDisc };
+            }, [students, month, year]);
+
+            const handleExportExcel = () => {
+                if (data.total === 0 && data.totalDisc === 0) return addToast("No data to export", ToastType.Info);
+                const summary = { totalCollected: data.total, totalDiscounted: data.totalDisc };
+                exportMonthlyReportToExcel(data.daily, `${month + 1}-${year}`, summary);
+                addToast("Exported to Excel!", ToastType.Success);
+            };
+
+            const handleExportPdf = () => {
+                if (data.total === 0 && data.totalDisc === 0) return addToast("No data to export", ToastType.Info);
+                const summary = { totalCollected: data.total, totalDiscounted: data.totalDisc };
+                exportMonthlyReportToPdf(data.daily, `${month + 1}-${year}`, summary);
+                addToast("Exported to PDF!", ToastType.Success);
+            };
+
+            return (
+                <div className="container mx-auto p-4 sm:p-8">
+                    <div className="flex justify-between items-center mb-6">
+                        <h2 className="text-3xl font-bold mb-6">Monthly Report</h2>
+                        <div className="flex gap-2">
+                            <button onClick={handleExportExcel} className="bg-sky-600 text-white px-3 py-2 rounded flex items-center"><Download size={18} className="mr-2"/> Excel</button>
+                            <button onClick={handleExportPdf} className="bg-teal-600 text-white px-3 py-2 rounded flex items-center"><FileDown size={18} className="mr-2"/> PDF</button>
+                        </div>
+                    </div>
+                    <div className="bg-white p-6 rounded-xl shadow-lg mb-6 flex gap-4">
+                        <select value={month} onChange={e => setMonth(Number(e.target.value))} className="border p-2 rounded">{['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'].map((m, i) => <option key={i} value={i}>{m}</option>)}</select>
+                        <select value={year} onChange={e => setYear(Number(e.target.value))} className="border p-2 rounded">{[2023, 2024, 2025, 2026].map(y => <option key={y} value={y}>{y}</option>)}</select>
+                    </div>
+                    <div className="bg-white p-6 rounded-xl shadow-lg mb-6"><p>Total Collected: <span className="font-bold text-emerald-600 text-xl">₹{data.total}</span></p></div>
+                    <div className="bg-white p-6 rounded-xl shadow-lg h-80">
+                        <ResponsiveContainer width="100%" height="100%"><BarChart data={data.daily}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="day" /><YAxis /><Tooltip /><Bar dataKey="collected" fill="#10b981" /></BarChart></ResponsiveContainer>
+                    </div>
+                </div>
+            );
+        };
+
+        const UserManagementPage = () => {
+            const { users, addUser, deleteUser, updateUserPermissions } = useData();
+            const { addToast } = useToast();
+            const [email, setEmail] = useState('');
+            const [password, setPassword] = useState('');
+            const [confirmPassword, setConfirmPassword] = useState('');
+            const [editingPermissionsUser, setEditingPermissionsUser] = useState(null);
+            
+            const handleAdd = (e) => {
+                e.preventDefault();
+                if (password !== confirmPassword) {
+                    addToast("Passwords do not match", ToastType.Error);
+                    return;
+                }
+                if(addUser({email, password})) { 
+                    setEmail(''); 
+                    setPassword(''); 
+                    setConfirmPassword('');
+                    addToast("User added successfully", ToastType.Success);
+                } else {
+                    addToast("User already exists", ToastType.Error);
+                }
+            };
+
+            return (
+                 <div className="container mx-auto p-8">
+                    <h2 className="text-2xl font-bold mb-6">User Management</h2>
+                    <div className="bg-white p-6 rounded-xl shadow-lg mb-8">
+                        <h3 className="font-bold mb-4">Add User</h3>
+                        <form onSubmit={handleAdd} className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+                            <div><label className="block text-sm">Email</label><input type="email" value={email} onChange={e => setEmail(e.target.value)} className="border rounded p-2 w-full" required /></div>
+                            <div><label className="block text-sm">Password</label><input type="password" value={password} onChange={e => setPassword(e.target.value)} className="border rounded p-2 w-full" required /></div>
+                            <div><label className="block text-sm">Confirm Password</label><input type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} className="border rounded p-2 w-full" required /></div>
+                            <button className="bg-indigo-600 text-white px-4 py-2 rounded">Add User</button>
+                        </form>
+                    </div>
+                    <div className="bg-white p-6 rounded-xl shadow-lg">
+                        <table className="min-w-full text-left">
+                            <thead>
+                                <tr className="border-b">
+                                    <th className="p-3">Email</th>
+                                    <th className="p-3">Role</th>
+                                    <th className="p-3">Permissions</th>
+                                    <th className="p-3">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {users.map(u => (
+                                    <tr key={u.email} className="border-b hover:bg-slate-50">
+                                        <td className="p-3">{u.email}</td>
+                                        <td className="p-3"><span className={`px-2 py-1 rounded text-xs font-bold ${u.role === 'admin' ? 'bg-purple-100 text-purple-800' : 'bg-gray-100 text-gray-800'}`}>{u.role.toUpperCase()}</span></td>
+                                        <td className="p-3">
+                                            <button onClick={() => setEditingPermissionsUser(u)} className="text-indigo-600 hover:text-indigo-800 flex items-center text-sm">
+                                                <Unlock size={16} className="mr-1"/> Edit Permissions
+                                            </button>
+                                        </td>
+                                        <td className="p-3">
+                                            {u.role !== 'admin' && <button onClick={() => deleteUser(u.email)} className="text-red-500 hover:text-red-700" title="Delete User"><Trash2 size={18}/></button>}
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <PermissionsModal 
+                        isOpen={!!editingPermissionsUser} 
+                        user={editingPermissionsUser} 
+                        onClose={() => setEditingPermissionsUser(null)} 
+                        onSave={(email, perms) => {
+                            updateUserPermissions(email, perms);
+                            addToast("Permissions updated", ToastType.Success);
+                        }}
+                    />
+                 </div>
+            );
+        };
+        
+        const AccountSettingsPage = () => {
+            const { loggedInUser } = useAuth();
+            const { updateUserPassword, addToast } = useData();
+            const [curr, setCurr] = useState('');
+            const [newP, setNewP] = useState('');
+            
+            const handleUpdate = (e) => {
+                e.preventDefault();
+                const res = updateUserPassword(loggedInUser.email, curr, newP);
+                if(res.success) { addToast("Password updated", ToastType.Success); setCurr(''); setNewP(''); }
+                else addToast(res.message, ToastType.Error);
+            };
+
+            return (
+                <div className="container mx-auto p-8">
+                    <h2 className="text-2xl font-bold mb-6">Account Settings</h2>
+                    <div className="bg-white p-6 rounded-xl shadow-lg max-w-md">
+                        <form onSubmit={handleUpdate} className="space-y-4">
+                            <div><label className="block text-sm">Current Password</label><input type="password" value={curr} onChange={e => setCurr(e.target.value)} className="border rounded w-full p-2" required /></div>
+                            <div><label className="block text-sm">New Password</label><input type="password" value={newP} onChange={e => setNewP(e.target.value)} className="border rounded w-full p-2" required /></div>
+                            <button className="bg-indigo-600 text-white px-4 py-2 rounded w-full">Update Password</button>
+                        </form>
+                    </div>
+                </div>
+            );
+        };
+
+        const NotFoundPage = () => <div className="flex flex-col items-center justify-center min-h-screen"><h1 className="text-6xl font-bold text-indigo-600">404</h1><p className="text-2xl mt-4">Page Not Found</p><Link to="/" className="mt-4 text-indigo-600 underline">Go Home</Link></div>;
+
+        // --- APP ---
+        const App = () => {
+            return (
+                <AppProvider>
+                    <HashRouter>
+                        <ToastContainer />
+                        <Routes>
+                            <Route path="/login" element={<LoginPage />} />
+                            <Route path="/" element={<ProtectedRoute><MainLayout /></ProtectedRoute>}>
+                                <Route index element={<DashboardPage />} />
+                                <Route path="student/new" element={<ProtectedRoute requiredPermission="canAddStudents"><StudentAddPage /></ProtectedRoute>} />
+                                <Route path="student/:id" element={<ProtectedRoute requiredPermission="canViewStudents"><StudentDetailPage /></ProtectedRoute>} />
+                                <Route path="student/:id/edit" element={<ProtectedRoute requiredPermission="canEditStudents"><StudentEditPage /></ProtectedRoute>} />
+                                <Route path="reports" element={<ProtectedRoute requiredPermission="canViewReports"><Outlet/></ProtectedRoute>}>
+                                    <Route path="summary" element={<ReportsPage />} />
+                                    <Route path="daily" element={<DailyReportPage />} />
+                                    <Route path="monthly" element={<MonthlyReportPage />} />
+                                </Route>
+                                <Route path="admin" element={<ProtectedRoute requiredPermission="canManageUsers"><Outlet/></ProtectedRoute>}>
+                                     <Route path="users" element={<UserManagementPage />} />
+                                     <Route path="settings" element={<AccountSettingsPage />} />
+                                </Route>
+                            </Route>
+                            <Route path="*" element={<NotFoundPage />} />
+                        </Routes>
+                    </HashRouter>
+                </AppProvider>
+            );
+        };
+
+        const root = createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
