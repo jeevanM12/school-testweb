@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="https://cdn-icons-png.flaticon.com/512/2995/2995434.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>FeeManager Pro</title>
+    <title>FeeManager Pro (Cloud)</title>
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -16,31 +16,22 @@
     
     <style>
         body { font-family: 'Inter', sans-serif; }
-        /* Custom Scrollbar for Webkit */
+        /* Custom Scrollbar */
         ::-webkit-scrollbar { width: 8px; height: 8px; }
         ::-webkit-scrollbar-track { background: #f1f5f9; }
         ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
         ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
         
         /* Animations */
-        @keyframes fadeInDown {
-            from { opacity: 0; transform: translate3d(0, -20px, 0); }
-            to { opacity: 1; transform: translate3d(0, 0, 0); }
-        }
-        @keyframes fadeInRight {
-            from { opacity: 0; transform: translate3d(20px, 0, 0); }
-            to { opacity: 1; transform: translate3d(0, 0, 0); }
-        }
-        @keyframes spin {
-            from { transform: rotate(0deg); }
-            to { transform: rotate(360deg); }
-        }
+        @keyframes fadeInDown { from { opacity: 0; transform: translate3d(0, -20px, 0); } to { opacity: 1; transform: translate3d(0, 0, 0); } }
+        @keyframes fadeInRight { from { opacity: 0; transform: translate3d(20px, 0, 0); } to { opacity: 1; transform: translate3d(0, 0, 0); } }
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
         .animate-fade-in-down { animation: fadeInDown 0.3s ease-out; }
         .animate-fade-in-right { animation: fadeInRight 0.3s ease-out; }
         .animate-spin-slow { animation: spin 3s linear infinite; }
     </style>
 
-    <!-- Import Map for React, Libraries & Gemini API -->
+    <!-- Import Map -->
     <script type="importmap">
     {
       "imports": {
@@ -57,8 +48,6 @@
       }
     }
     </script>
-    
-    <!-- Babel for JSX compilation in browser -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 </head>
 <body class="bg-slate-50">
@@ -68,373 +57,76 @@
         import React, { useState, useEffect, useMemo, useContext, createContext, useRef } from 'react';
         import { createRoot } from 'react-dom/client';
         import { HashRouter, Routes, Route, Link, useNavigate, Navigate, Outlet, useParams, useLocation } from 'react-router-dom';
-        import { 
-            Eye, Edit3, Trash2, PlusCircle, UploadCloud, Download, Search, X, 
-            ChevronUp, ChevronDown, ListFilter, BarChart3, Users, DollarSign, 
-            FileText, Tag, FileDown, BookCopy, UserCog, UserPlus, ShieldCheck, 
-            Lock, KeyRound, LogOut, CalendarDays, CheckCircle, XCircle, Info, 
-            Calendar, ChevronLeft, Save, Sparkles, MessageSquareText, Copy, BrainCircuit,
-            Phone, Unlock
-        } from 'lucide-react';
+        import { Eye, Edit3, Trash2, PlusCircle, UploadCloud, Download, Search, X, ChevronUp, ChevronDown, ListFilter, BarChart3, Users, DollarSign, FileText, Tag, FileDown, BookCopy, UserCog, UserPlus, ShieldCheck, Lock, LogOut, CalendarDays, CheckCircle, XCircle, Info, Calendar, ChevronLeft, Save, Sparkles, Copy, Phone, Unlock, Key, BrainCircuit, AlertCircle, Database, CloudOff, ShieldAlert, ExternalLink } from 'lucide-react';
         import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
         import * as XLSX from 'xlsx';
         import jsPDF from 'jspdf';
-        import 'jspdf-autotable';
+        import autoTable from 'jspdf-autotable';
         import { GoogleGenerativeAI } from "@google/generative-ai";
+        
+        // --- FIREBASE IMPORTS ---
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, doc, addDoc, updateDoc, deleteDoc, onSnapshot, query, setDoc, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // --- ⚡️ USER CONFIGURATION REQUIRED ⚡️ ---
+        
+        const getFirebaseConfig = () => {
+            if (typeof __firebase_config !== 'undefined') {
+                return JSON.parse(__firebase_config);
+            }
+            
+            return {
+                apiKey: "AIzaSyDPJu3sRISdjSbi0GkWftNzJfCqZWQtHiw",
+                authDomain: "schoool23.firebaseapp.com",
+                projectId: "schoool23",
+                storageBucket: "schoool23.firebasestorage.app",
+                messagingSenderId: "535364681100",
+                appId: "1:535364681100:web:707c9d4bd84267ae95aaa9",
+                measurementId: "G-RQE1LDP2M4"
+            };
+        };
+
+        const firebaseConfig = getFirebaseConfig();
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        
+        // Use a consistent App ID for data partitioning
+        const APP_ID = typeof __app_id !== 'undefined' ? __app_id : 'fee-manager-pro-v1';
 
         // --- CONSTANTS ---
         const APP_NAME = "FeeManager Pro";
-        const LOCAL_STORAGE_KEYS = {
-            STUDENTS: 'feeManager_studentsData',
-            USERS: 'feeManager_appUsersData',
-            LOGGED_IN_USER: 'feeManager_loggedInFeeUser'
-        };
-
-        const defaultUserPermissions = {
-            canViewDashboardSummary: true,
-            canViewStudents: true,
-            canAddStudents: false,
-            canEditStudents: false,
-            canDeleteStudents: false,
-            canManagePayments: false,
-            canManageDiscounts: false,
-            canViewReports: false,
-            canImportExport: false,
-            canManageUsers: false,
-        };
-
-        const adminPermissions = {
-            canViewDashboardSummary: true,
-            canViewStudents: true,
-            canAddStudents: true,
-            canEditStudents: true,
-            canDeleteStudents: true,
-            canManagePayments: true,
-            canManageDiscounts: true,
-            canViewReports: true,
-            canImportExport: true,
-            canManageUsers: true,
-        };
-
+        
+        const defaultUserPermissions = { canViewDashboardSummary: true, canViewStudents: true, canAddStudents: false, canEditStudents: false, canDeleteStudents: false, canManagePayments: false, canManageDiscounts: false, canViewReports: false, canImportExport: false, canManageUsers: false };
+        const adminPermissions = { canViewDashboardSummary: true, canViewStudents: true, canAddStudents: true, canEditStudents: true, canDeleteStudents: true, canManagePayments: true, canManageDiscounts: true, canViewReports: true, canImportExport: true, canManageUsers: true };
+        
         const initialUsers = [
             { email: 'admin@school.com', password: 'admin', role: 'admin', permissions: adminPermissions },
-            { email: 'srisubhodaya@gmail.com', password: 'Subho12ad', role: 'admin', permissions: adminPermissions },
             { email: 'user@school.com', password: 'user', role: 'user', permissions: defaultUserPermissions },
         ];
 
-        const initialStudentsData = [
-            { id: 'S1001', name: 'Amit Kumar', rollNumber: 'R001', class: '10', grade: 'A', phoneNumber: '9876543210', totalFees: 50000, payments: [{ id: 'P1', amount: 20000, date: '2024-07-15T10:30:00Z', remarks: 'First Installment' },{ id: 'P2', amount: 15000, date: '2024-08-20T14:00:00Z', remarks: 'Second Installment' }], discounts: [{ id: 'D1', amount: 2000, reason: 'Sibling Discount', date: '2024-07-10T09:00:00Z' }] },
-            { id: 'S1002', name: 'Priya Sharma', rollNumber: 'R002', class: '12', grade: 'B', phoneNumber: '9123456789', totalFees: 60000, payments: [{ id: 'P3', amount: 30000, date: '2024-07-20T11:00:00Z', remarks: 'Full Payment Attempt 1' }], discounts: [] },
-            { id: 'S1003', name: 'Rahul Singh', rollNumber: 'R003', class: '10', grade: 'A', phoneNumber: '9988776655', totalFees: 50000, payments: [{ id: 'P4', amount: 10000, date: '2024-08-01T12:15:00Z', remarks: 'Partial Payment' }], discounts: [{ id: 'D2', amount: 1000, reason: 'Early Bird', date: '2024-07-05T10:00:00Z' }] },
-        ];
+        const ToastType = { Success: 'success', Error: 'error', Info: 'info' };
 
-        const ToastType = {
-            Success: 'success',
-            Error: 'error',
-            Info: 'info',
-        };
-
-        // --- GEMINI SERVICE ---
+        // --- SERVICES ---
         const generateAIContent = async (prompt) => {
-            const apiKey = ""; // Provided by environment
+            const apiKey = ""; 
+            if(!apiKey) return "AI API Key missing in code.";
             try {
                 const genAI = new GoogleGenerativeAI(apiKey);
                 const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-preview-09-2025" });
                 const result = await model.generateContent(prompt);
                 return result.response.text();
-            } catch (error) {
-                console.error("Gemini Error:", error);
-                throw new Error("Failed to generate AI content. Please try again.");
-            }
+            } catch (error) { console.error("Gemini Error:", error); throw new Error("AI Error"); }
         };
 
-        // --- UTILS ---
-        const formatDateTime = (isoString) => {
-            if (!isoString) return 'N/A';
-            try {
-                const date = new Date(isoString);
-                if (isNaN(date.getTime())) return 'Invalid Date';
-                return `${date.toLocaleDateString()} ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
-            } catch (error) {
-                return 'Invalid Date';
-            }
+        const formatDateTime = (iso) => { try { const d = new Date(iso); if(isNaN(d)) return 'N/A'; return `${d.toLocaleDateString()} ${d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}`; } catch{ return 'N/A'; }};
+        const formatISODateToYMD = (iso) => { try { return new Date(iso).toISOString().split('T')[0]; } catch{ return ''; }};
+        const calculateFeeDetails = (s) => {
+            const paid = (s.payments || []).reduce((acc, p) => acc + p.amount, 0);
+            const disc = (s.discounts || []).reduce((acc, d) => acc + d.amount, 0);
+            return { totalPaid: paid, totalDiscount: disc, remainingBalance: s.totalFees - paid - disc };
         };
-
-        const formatISODateToYMD = (isoString) => {
-            try {
-                const date = new Date(isoString);
-                if (isNaN(date.getTime())) return '';
-                return date.toISOString().split('T')[0];
-            } catch (e) {
-                return '';
-            }
-        };
-
-        const calculateFeeDetails = (student) => {
-            const totalPaid = student.payments.reduce((sum, p) => sum + p.amount, 0);
-            const totalDiscount = student.discounts.reduce((sum, d) => sum + d.amount, 0);
-            const remainingBalance = student.totalFees - totalPaid - totalDiscount;
-            const lastPayment = student.payments.length > 0 ? student.payments.reduce((latest, p) => new Date(p.date) > new Date(latest.date) ? p : latest) : null;
-            return { totalPaid, totalDiscount, remainingBalance, lastPaymentDate: lastPayment ? lastPayment.date : null };
-        };
-
-        // --- DATA SERVICES ---
-        const exportToExcel = (data, filename, sheetname = 'Sheet1') => {
-            try {
-                if (!data || data.length === 0) throw new Error("No data to export.");
-                const worksheet = XLSX.utils.json_to_sheet(data);
-                const workbook = XLSX.utils.book_new();
-                XLSX.utils.book_append_sheet(workbook, worksheet, sheetname);
-                XLSX.writeFile(workbook, `${filename}.xlsx`);
-                return { success: true };
-            } catch (error) {
-                console.error("Error exporting to Excel:", error);
-                return { success: false, error: error.message || "Unknown error" };
-            }
-        };
-
-        const prepareStudentListForExport = (students) => {
-            const dataToExport = [];
-            students.forEach(student => {
-                const { totalPaid, totalDiscount, remainingBalance } = calculateFeeDetails(student);
-                const baseStudentData = {
-                    'Name': student.name,
-                    'Roll Number': student.rollNumber,
-                    'Class': student.class,
-                    'Grade': student.grade,
-                    'Phone': student.phoneNumber || 'N/A',
-                    'Total Fees': student.totalFees,
-                    'Total Paid (Cumulative)': totalPaid,
-                    'Total Discount (Cumulative)': totalDiscount,
-                    'Balance Due': remainingBalance,
-                };
-                
-                let transactionsAdded = false;
-                student.payments.forEach(p => {
-                    dataToExport.push({ ...baseStudentData, 'Transaction Type': 'Payment', 'Transaction ID': p.id, 'Amount': p.amount, 'Date': formatDateTime(p.date), 'Details': p.remarks || 'N/A' });
-                    transactionsAdded = true;
-                });
-                student.discounts.forEach(d => {
-                    dataToExport.push({ ...baseStudentData, 'Transaction Type': 'Discount', 'Transaction ID': d.id, 'Amount': d.amount, 'Date': formatDateTime(d.date), 'Details': d.reason || 'N/A' });
-                    transactionsAdded = true;
-                });
-                if (!transactionsAdded) {
-                    dataToExport.push({ ...baseStudentData, 'Transaction Type': 'N/A', 'Transaction ID': 'N/A', 'Amount': 'N/A', 'Date': 'N/A', 'Details': 'No transactions' });
-                }
-            });
-            return dataToExport;
-        };
-
-        const exportToPdf = (data, filename) => {
-            try {
-                const doc = new jsPDF.default ? new jsPDF.default() : new jsPDF();
-                
-                doc.text("Student Financial Report", 14, 16);
-                doc.setFontSize(10);
-                doc.text(`Generated on: ${new Date().toLocaleDateString()}`, 14, 22);
-
-                const tableColumn = ["Name", "Roll No.", "Class", "Phone", "Total Fees", "Balance Due"];
-                const tableRows = data.map(student => [
-                    student.name,
-                    student.rollNumber,
-                    student.class,
-                    student.phoneNumber || '-',
-                    `INR ${student.totalFees.toLocaleString()}`,
-                    `INR ${student.remainingBalance.toLocaleString()}`,
-                ]);
-
-                doc.autoTable({
-                    head: [tableColumn],
-                    body: tableRows,
-                    startY: 30,
-                    theme: 'grid',
-                    headStyles: { fillColor: [22, 160, 133] }
-                });
-
-                doc.save(`${filename}.pdf`);
-                return { success: true };
-            } catch (error) {
-                console.error(error);
-                return { success: false, error: error.message };
-            }
-        };
-
-        const exportReportToExcel = (summaryData, classData, filename) => {
-            try {
-                const summarySheet = XLSX.utils.json_to_sheet(summaryData);
-                const classSheet = XLSX.utils.json_to_sheet(classData);
-                const workbook = XLSX.utils.book_new();
-                XLSX.utils.book_append_sheet(workbook, summarySheet, 'Financial Summary');
-                XLSX.utils.book_append_sheet(workbook, classSheet, 'Class-wise Pending Fees');
-                XLSX.writeFile(workbook, `${filename}.xlsx`);
-                return { success: true };
-            } catch (error) {
-                return { success: false, error: error.message };
-            }
-        };
-
-        const exportReportToPdf = (summaryCards, summaryData, classData, filename) => {
-            try {
-                const doc = new jsPDF.default ? new jsPDF.default() : new jsPDF();
-                doc.text("Financial Report Summary", 14, 16);
-                doc.setFontSize(10);
-                doc.text(`Generated on: ${new Date().toLocaleDateString()}`, 14, 22);
-
-                doc.autoTable({
-                    head: [['Metric', 'Value']],
-                    body: summaryCards.map(c => [c.title, c.isCurrency ? `INR ${c.value.toLocaleString()}` : c.value.toLocaleString()]),
-                    startY: 30,
-                    theme: 'striped',
-                });
-                const firstTableHeight = doc.lastAutoTable.finalY;
-
-                doc.text("Financial Overview Breakdown", 14, firstTableHeight + 15);
-                doc.autoTable({
-                    head: [['Category', 'Amount']],
-                    body: summaryData.map(d => [d.name, `INR ${d.value.toLocaleString()}`]),
-                    startY: firstTableHeight + 20,
-                    theme: 'grid',
-                    headStyles: { fillColor: [22, 160, 133] }
-                });
-                const secondTableHeight = doc.lastAutoTable.finalY;
-
-                doc.text("Pending Fees by Class", 14, secondTableHeight + 15);
-                doc.autoTable({
-                    head: [['Class', 'Pending Amount']],
-                    body: classData.map(d => [d.name, `INR ${d.pending.toLocaleString()}`]),
-                    startY: secondTableHeight + 20,
-                    theme: 'grid',
-                    headStyles: { fillColor: [255, 128, 66] }
-                });
-
-                doc.save(`${filename}.pdf`);
-                return { success: true };
-            } catch (error) {
-                return { success: false, error: error.message };
-            }
-        };
-
-        const exportDailyReportToExcel = (transactions, date) => {
-            try {
-                const dataToExport = transactions.map(t => ({
-                    'Student Name': t.studentName,
-                    'Roll Number': t.rollNumber,
-                    'Transaction Type': t.type,
-                    'Details': t.details,
-                    'Amount (INR)': t.amount,
-                    'Date': formatDateTime(t.date),
-                }));
-                return exportToExcel(dataToExport, `daily_report_${date}`);
-            } catch (error) {
-                return { success: false, error: error.message };
-            }
-        };
-
-        const exportDailyReportToPdf = (transactions, date, summary) => {
-            try {
-                const doc = new jsPDF.default ? new jsPDF.default() : new jsPDF();
-                const formattedDate = new Date(date).toLocaleDateString('en-GB');
-                doc.text(`Daily Financial Report for ${formattedDate}`, 14, 16);
-                
-                doc.autoTable({
-                    body: [
-                        ['Total Collected', `INR ${summary.totalCollected.toLocaleString()}`],
-                        ['Total Discounted', `INR ${summary.totalDiscounted.toLocaleString()}`],
-                    ],
-                    startY: 22,
-                    theme: 'striped',
-                });
-                
-                const tableColumn = ["Student Name", "Roll No.", "Type", "Details", "Amount"];
-                const tableRows = transactions.map(t => [t.studentName, t.rollNumber, t.type, t.details, `INR ${t.amount.toLocaleString()}`]);
-
-                doc.autoTable({
-                    head: [tableColumn],
-                    body: tableRows,
-                    startY: doc.lastAutoTable.finalY + 10,
-                    theme: 'grid',
-                });
-
-                doc.save(`daily_report_${date}.pdf`);
-                return { success: true };
-            } catch (error) {
-                return { success: false, error: error.message };
-            }
-        };
-
-        const exportMonthlyReportToExcel = (dailyData, monthYear, summary) => {
-            try {
-                const summaryData = [
-                    { Metric: 'Total Collected', Amount: summary.totalCollected },
-                    { Metric: 'Total Discounted', Amount: summary.totalDiscounted }
-                ];
-                const dailyExportData = dailyData.map(d => ({ 'Day': d.day, 'Amount Collected (INR)': d.collected }));
-
-                const summarySheet = XLSX.utils.json_to_sheet(summaryData);
-                const dailySheet = XLSX.utils.json_to_sheet(dailyExportData);
-                const workbook = XLSX.utils.book_new();
-                XLSX.utils.book_append_sheet(workbook, summarySheet, 'Monthly Summary');
-                XLSX.utils.book_append_sheet(workbook, dailySheet, 'Daily Collections');
-                XLSX.writeFile(workbook, `monthly_report_${monthYear}.xlsx`);
-                return { success: true };
-            } catch (error) {
-                return { success: false, error: error.message };
-            }
-        };
-
-        const exportMonthlyReportToPdf = (dailyData, monthYear, summary) => {
-             try {
-                const doc = new jsPDF.default ? new jsPDF.default() : new jsPDF();
-                doc.text(`Monthly Financial Report for ${monthYear}`, 14, 16);
-
-                doc.autoTable({
-                    body: [
-                        ['Total Collected', `INR ${summary.totalCollected.toLocaleString()}`],
-                        ['Total Discounted', `INR ${summary.totalDiscounted.toLocaleString()}`],
-                    ],
-                    startY: 22,
-                    theme: 'striped',
-                });
-                
-                const tableColumn = ["Day of Month", "Amount Collected (INR)"];
-                const tableRows = dailyData.filter(d => d.collected > 0).map(d => [d.day, `INR ${d.collected.toLocaleString()}`]);
-
-                doc.autoTable({
-                    head: [tableColumn],
-                    body: tableRows,
-                    startY: doc.lastAutoTable.finalY + 10,
-                    theme: 'grid',
-                });
-                
-                doc.save(`monthly_report_${monthYear}.pdf`);
-                return { success: true };
-            } catch (error) {
-                return { success: false, error: error.message };
-            }
-        };
-
-        // --- HOOKS ---
-        function useLocalStorage(key, initialValue) {
-            const [storedValue, setStoredValue] = useState(() => {
-                try {
-                    const item = window.localStorage.getItem(key);
-                    return item ? JSON.parse(item) : initialValue;
-                } catch (error) {
-                    console.error(error);
-                    return initialValue;
-                }
-            });
-
-            useEffect(() => {
-                try {
-                    window.localStorage.setItem(key, JSON.stringify(storedValue));
-                } catch (error) {
-                    console.error(error);
-                }
-            }, [key, storedValue]);
-
-            return [storedValue, setStoredValue];
-        }
 
         // --- CONTEXT ---
         const AuthContext = createContext(undefined);
@@ -442,10 +134,103 @@
         const ToastContext = createContext(undefined);
 
         const AppProvider = ({ children }) => {
-            const [users, setUsers] = useLocalStorage(LOCAL_STORAGE_KEYS.USERS, initialUsers);
-            const [students, setStudents] = useLocalStorage(LOCAL_STORAGE_KEYS.STUDENTS, initialStudentsData);
-            const [loggedInUser, setLoggedInUser] = useLocalStorage(LOCAL_STORAGE_KEYS.LOGGED_IN_USER, null);
+            const [users, setUsers] = useState([]);
+            const [students, setStudents] = useState([]);
+            const [loggedInUser, setLoggedInUser] = useState(null);
             const [toasts, setToasts] = useState([]);
+            const [firebaseUser, setFirebaseUser] = useState(null);
+            const [isLoading, setIsLoading] = useState(true);
+            const [configError, setConfigError] = useState(false);
+            const [permissionError, setPermissionError] = useState(false);
+
+            const addToast = (message, type = ToastType.Info) => {
+                const id = Date.now();
+                setToasts(prev => [...prev, { id, message, type }]);
+                setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 3000);
+            };
+            const removeToast = (id) => setToasts(prev => prev.filter(t => t.id !== id));
+
+            // --- FIREBASE AUTH & DATA SYNC ---
+            
+            // 1. Initialize Auth
+            useEffect(() => {
+                if (firebaseConfig.apiKey === "REPLACE_WITH_YOUR_API_KEY") {
+                    setConfigError(true);
+                    setIsLoading(false);
+                    return;
+                }
+
+                const initAuth = async () => {
+                    try {
+                        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                             await signInAnonymously(auth);
+                        } else {
+                            await signInAnonymously(auth);
+                        }
+                    } catch (err) {
+                        console.error("Auth Error", err);
+                        addToast("Auth failed. Ensure Anonymous auth is enabled in Console.", ToastType.Error);
+                        setIsLoading(false);
+                    }
+                };
+                initAuth();
+                const unsubscribe = onAuthStateChanged(auth, (u) => setFirebaseUser(u));
+                return () => unsubscribe();
+            }, []);
+
+            // 2. Sync Data (Only after Auth)
+            useEffect(() => {
+                if (!firebaseUser) return;
+
+                const studentsRef = collection(db, 'artifacts', APP_ID, 'public', 'data', 'students');
+                const unsubStudents = onSnapshot(studentsRef, (snapshot) => {
+                    const loadedStudents = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    setStudents(loadedStudents);
+                    setIsLoading(false);
+                    setPermissionError(false); // Clear error on success
+                }, (error) => {
+                    // Suppress scary console error for expected permission issues
+                    if (error.code === 'permission-denied') {
+                        console.warn("Permission denied by Firebase. Waiting for user to update rules.");
+                        setPermissionError(true);
+                        setIsLoading(false);
+                    } else {
+                        console.error("Student Sync Error", error);
+                        addToast("Error syncing data: " + error.message, ToastType.Error);
+                    }
+                });
+
+                const usersRef = collection(db, 'artifacts', APP_ID, 'public', 'data', 'users');
+                const unsubUsers = onSnapshot(usersRef, (snapshot) => {
+                    const loadedUsers = snapshot.docs.map(doc => ({ ...doc.data() }));
+                    if (loadedUsers.length === 0 && !permissionError) {
+                        initialUsers.forEach(async (u) => {
+                            try {
+                                await setDoc(doc(db, 'artifacts', APP_ID, 'public', 'data', 'users', u.email), u);
+                            } catch (e) { 
+                                // Silent fail or log if permissions prevent seeding
+                            }
+                        });
+                    } else {
+                        setUsers(loadedUsers);
+                    }
+                }, (error) => {
+                    if (error.code === 'permission-denied') {
+                         console.warn("Permission denied (Users). Waiting for user to update rules.");
+                        setPermissionError(true);
+                        setIsLoading(false);
+                    } else {
+                        console.error("User Sync Error", error);
+                    }
+                });
+
+                return () => {
+                    unsubStudents();
+                    unsubUsers();
+                };
+            }, [firebaseUser]);
+
+            // --- APP LOGIC ---
 
             const login = (email, password) => {
                 const user = users.find(u => u.email.toLowerCase() === email.toLowerCase() && u.password === password);
@@ -459,110 +244,164 @@
 
             const logout = () => {
                 setLoggedInUser(null);
-                addToast('You have been logged out.', ToastType.Info);
-            };
-            
-            const removeToast = (id) => {
-                setToasts(prev => prev.filter(toast => toast.id !== id));
-            };
-            
-            const addToast = (message, type = ToastType.Info) => {
-                const id = Date.now();
-                setToasts(prev => [...prev, { id, message, type }]);
-                setTimeout(() => { removeToast(id); }, 2000);
+                addToast('Logged out.', ToastType.Info);
             };
 
-            const addStudent = (newStudent) => {
-                const studentWithDefaults = { ...newStudent, id: `S${Date.now()}`, payments: [], discounts: [] };
-                setStudents(prev => [...prev, studentWithDefaults]);
-            };
+            useEffect(() => {
+                if (!loggedInUser) return;
+                const IDLE_TIMEOUT = 10 * 60 * 1000; 
+                let timer;
+                const handleLogout = () => { setLoggedInUser(null); addToast("Session expired.", ToastType.Info); };
+                const resetTimer = () => { if (timer) clearTimeout(timer); timer = setTimeout(handleLogout, IDLE_TIMEOUT); };
+                const events = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart'];
+                events.forEach(event => window.addEventListener(event, resetTimer));
+                resetTimer();
+                return () => { if (timer) clearTimeout(timer); events.forEach(event => window.removeEventListener(event, resetTimer)); };
+            }, [loggedInUser]);
 
-            const updateStudent = (updatedStudent) => {
-                setStudents(prev => prev.map(s => s.id === updatedStudent.id ? updatedStudent : s));
-            };
-            
-            const deleteStudent = (studentId) => {
-                setStudents(prev => prev.filter(s => s.id !== studentId));
-            };
-
-            const addPayment = (studentId, paymentDetails) => {
-                setStudents(prev => prev.map(s => s.id === studentId ? { ...s, payments: [...s.payments, { ...paymentDetails, id: `P${Date.now()}`, date: paymentDetails.date || new Date().toISOString() }] } : s ));
-            };
-
-            const addDiscount = (studentId, discountDetails) => {
-                setStudents(prev => prev.map(s => s.id === studentId ? { ...s, discounts: [...s.discounts, { ...discountDetails, id: `D${Date.now()}`, date: discountDetails.date || new Date().toISOString() }] } : s ));
-            };
-            
-            const updateDiscount = (studentId, updatedDiscount) => {
-                setStudents(prev => prev.map(s => s.id === studentId ? { ...s, discounts: s.discounts.map(d => d.id === updatedDiscount.id ? updatedDiscount : d) } : s));
-            };
-
-            const deleteDiscount = (studentId, discountId) => {
-                setStudents(prev => prev.map(s => s.id === studentId ? { ...s, discounts: s.discounts.filter(d => d.id !== discountId) } : s));
-            };
-
-            const addUser = (newUser) => {
-                if (users.some(u => u.email.toLowerCase() === newUser.email.toLowerCase())) return false;
-                setUsers(prev => [...prev, { ...newUser, role: 'user', permissions: defaultUserPermissions }]);
-                return true;
-            };
-
-            const deleteUser = (email) => {
-                setUsers(prev => prev.filter(user => user.email.toLowerCase() !== email.toLowerCase()));
-            };
-            
-            const updateUserRole = (email, role) => {
-                const userToUpdate = users.find(u => u.email.toLowerCase() === email.toLowerCase());
-                if (userToUpdate && userToUpdate.role === 'admin' && role === 'user') {
-                    const adminCount = users.filter(u => u.role === 'admin').length;
-                    if (adminCount <= 1) { addToast("Cannot demote the last remaining admin.", ToastType.Error); return; }
+            const addStudent = async (d) => {
+                if (!firebaseUser) return;
+                try {
+                    await addDoc(collection(db, 'artifacts', APP_ID, 'public', 'data', 'students'), { ...d, payments: [], discounts: [] });
+                } catch(e) { 
+                    if(e.code === 'permission-denied') setPermissionError(true);
+                    else addToast("Failed to add", ToastType.Error); 
                 }
-                setUsers(prev => prev.map(user => user.email.toLowerCase() === email.toLowerCase() ? { ...user, role: role, permissions: role === 'admin' ? adminPermissions : defaultUserPermissions } : user));
-                addToast(`User role for ${email} updated to ${role}.`, ToastType.Success);
+            };
+
+            const updateStudent = async (s) => {
+                if (!firebaseUser) return;
+                try {
+                    const ref = doc(db, 'artifacts', APP_ID, 'public', 'data', 'students', s.id);
+                    await updateDoc(ref, s);
+                } catch(e) { addToast("Failed to update", ToastType.Error); }
+            };
+
+            const deleteStudent = async (id) => {
+                if (!firebaseUser) return;
+                try {
+                    await deleteDoc(doc(db, 'artifacts', APP_ID, 'public', 'data', 'students', id));
+                } catch(e) { addToast("Failed to delete", ToastType.Error); }
+            };
+
+            const addPayment = async (sid, p) => {
+                const s = students.find(x => x.id === sid);
+                if(!s) return;
+                const updatedPayments = [...(s.payments||[]), { ...p, id: `P${Date.now()}` }];
+                updateStudent({ ...s, payments: updatedPayments });
+            };
+
+            const addDiscount = async (sid, d) => {
+                const s = students.find(x => x.id === sid);
+                if(!s) return;
+                const updatedDiscounts = [...(s.discounts||[]), { ...d, id: `D${Date.now()}` }];
+                updateStudent({ ...s, discounts: updatedDiscounts });
+            };
+
+            const addUser = async (u) => {
+                if(users.some(x=>x.email.toLowerCase()===u.email.toLowerCase())) return false;
+                try {
+                    await setDoc(doc(db, 'artifacts', APP_ID, 'public', 'data', 'users', u.email), { ...u, role: 'user', permissions: defaultUserPermissions });
+                    return true;
+                } catch(e) { addToast("Failed to add user", ToastType.Error); return false; }
+            };
+
+            const deleteUser = async (email) => {
+                try {
+                    await deleteDoc(doc(db, 'artifacts', APP_ID, 'public', 'data', 'users', email));
+                } catch(e) { addToast("Failed to delete user", ToastType.Error); }
             };
             
-            const updateUserPermissions = (email, permissions) => {
-                setUsers(prevUsers => prevUsers.map(user => user.email === email ? { ...user, permissions } : user));
-                if (loggedInUser && loggedInUser.email === email) { setLoggedInUser(prev => (prev ? { ...prev, permissions } : prev)); }
+            const updateUserRole = async (email, r) => {
+                const perms = r === 'admin' ? adminPermissions : defaultUserPermissions;
+                try {
+                    await updateDoc(doc(db, 'artifacts', APP_ID, 'public', 'data', 'users', email), { role: r, permissions: perms });
+                } catch(e) { addToast("Failed update", ToastType.Error); }
+            };
+            
+            const updateUserPermissions = async (email, p) => {
+                try {
+                    await updateDoc(doc(db, 'artifacts', APP_ID, 'public', 'data', 'users', email), { permissions: p });
+                } catch(e) { addToast("Failed update", ToastType.Error); }
             };
 
-            const updateUserPassword = (email, oldPass, newPass) => {
-                const userToUpdate = users.find(u => u.email.toLowerCase() === email.toLowerCase());
-                if (!userToUpdate) return { success: false, message: "User not found." };
-                if (userToUpdate.password !== oldPass) return { success: false, message: "Incorrect current password." };
-                setUsers(users.map(u => u.email.toLowerCase() === email.toLowerCase() ? { ...u, password: newPass } : u));
-                if (loggedInUser && loggedInUser.email.toLowerCase() === email.toLowerCase()) { setLoggedInUser({ ...loggedInUser, password: newPass }); }
-                return { success: true, message: "Password updated successfully." };
+            const updateUserPassword = async (email, op, np) => {
+                const u = users.find(x => x.email === email);
+                if(!u || u.password !== op) return {success: false, message: 'Invalid Current Password'};
+                try {
+                    await updateDoc(doc(db, 'artifacts', APP_ID, 'public', 'data', 'users', email), { password: np });
+                    return {success: true};
+                } catch(e) { return {success: false, message: 'DB Error'}; }
             };
 
-            const importStudents = (importedStudentsArray) => {
-                let newCount = 0;
-                let updatedCount = 0;
-                setStudents(prevStudents => {
-                    const updatedStudentsMap = new Map(prevStudents.map(s => [s.rollNumber.toLowerCase(), { ...s }]));
-                    importedStudentsArray.forEach(importedStudent => {
-                        const rollNumberKey = String(importedStudent.rollNumber || '').toLowerCase();
-                        if (!rollNumberKey) return;
-                        const existingStudent = updatedStudentsMap.get(rollNumberKey);
-                        if (existingStudent) {
-                            updatedStudentsMap.set(rollNumberKey, { ...existingStudent, name: importedStudent.name, class: importedStudent.class, grade: importedStudent.grade, phoneNumber: importedStudent.phoneNumber, totalFees: importedStudent.totalFees });
-                            updatedCount++;
-                        } else {
-                            updatedStudentsMap.set(rollNumberKey, { ...importedStudent, id: `S${Date.now()}${Math.random().toString(36).substring(2, 9)}`, payments: [], discounts: [] });
-                            newCount++;
-                        }
-                    });
-                    return Array.from(updatedStudentsMap.values());
+            const importStudents = (imp) => {
+                let c=0, u=0;
+                imp.forEach(async (i) => {
+                    const existing = students.find(s => s.rollNumber === i.rollNumber);
+                    if(existing) { updateStudent({ ...existing, ...i }); u++; } else { addStudent(i); c++; }
                 });
-                return { newCount, updatedCount };
+                return {newCount:c, updatedCount:u};
             };
+
+            if (permissionError) {
+                return (
+                    <div className="fixed inset-0 z-50 bg-slate-900 bg-opacity-95 flex items-center justify-center p-4">
+                         <div className="bg-white p-8 rounded-xl shadow-2xl max-w-2xl w-full">
+                            <div className="flex items-center gap-3 text-red-600 mb-6">
+                                <ShieldAlert size={40} />
+                                <h1 className="text-3xl font-bold text-slate-900">Permission Denied</h1>
+                            </div>
+                            <p className="text-lg text-slate-700 mb-4">Your Firebase Database is locked. You need to update your Security Rules to allow this app to save data.</p>
+                            
+                            <h3 className="font-bold text-slate-800 mb-2 mt-6">How to fix (1 minute):</h3>
+                            <ol className="list-decimal list-inside space-y-2 mb-6 text-slate-600">
+                                <li>Go to the <a href="https://console.firebase.google.com/project/schoool23/firestore/rules" target="_blank" className="text-indigo-600 underline font-semibold flex items-center inline-flex">Firebase Console Rules Tab <ExternalLink size={14} className="ml-1"/></a>.</li>
+                                <li>Delete the existing code there.</li>
+                                <li>Copy the code below and paste it in.</li>
+                                <li>Click <strong>Publish</strong>.</li>
+                                <li>Refresh this page.</li>
+                            </ol>
+                            
+                            <div className="bg-slate-900 text-green-400 p-4 rounded-lg font-mono text-sm overflow-x-auto relative mb-6">
+                                <pre>{`rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if true;
+    }
+  }
+}`}</pre>
+                                <button 
+                                    onClick={() => navigator.clipboard.writeText(`rules_version = '2';\nservice cloud.firestore {\n  match /databases/{database}/documents {\n    match /{document=**} {\n      allow read, write: if true;\n    }\n  }\n}`)}
+                                    className="absolute top-2 right-2 bg-slate-700 hover:bg-slate-600 text-white px-3 py-1 rounded text-xs"
+                                >
+                                    Copy
+                                </button>
+                            </div>
+                            
+                            <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4">
+                                <p className="text-sm text-yellow-700"><strong>Note:</strong> These rules allow anyone to write to your database. This is fine for testing/prototyping, but you should secure it later for production.</p>
+                            </div>
+                        </div>
+                    </div>
+                );
+            }
+
+            if (isLoading) {
+                 return (
+                    <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+                        <div className="flex flex-col items-center">
+                            <div className="animate-spin-slow text-indigo-600 mb-4"><Database size={48} /></div>
+                            <p className="text-slate-600 font-medium animate-pulse">Connecting to Cloud Database...</p>
+                        </div>
+                    </div>
+                );
+            }
 
             return (
                 <AuthContext.Provider value={{ loggedInUser, login, logout }}>
-                    <DataContext.Provider value={{ students, setStudents, users, setUsers, addStudent, updateStudent, deleteStudent, addPayment, addDiscount, updateDiscount, deleteDiscount, addUser, deleteUser, updateUserRole, updateUserPermissions, importStudents, updateUserPassword }}>
-                        <ToastContext.Provider value={{ addToast, toasts, removeToast }}>
-                            {children}
-                        </ToastContext.Provider>
+                    <DataContext.Provider value={{ students, users, addStudent, updateStudent, deleteStudent, addPayment, addDiscount, addUser, deleteUser, updateUserRole, updateUserPermissions, updateUserPassword, importStudents }}>
+                        <ToastContext.Provider value={{ addToast, toasts, removeToast }}>{children}</ToastContext.Provider>
                     </DataContext.Provider>
                 </AuthContext.Provider>
             );
@@ -572,145 +411,76 @@
         const useData = () => useContext(DataContext);
         const useToast = () => useContext(ToastContext);
 
-        // --- COMPONENTS ---
+        // --- EXPORTS ---
+        const prepareStudentListForExport = (students) => {
+            const dataToExport = [];
+            students.forEach(student => {
+                const { totalPaid, totalDiscount, remainingBalance } = calculateFeeDetails(student);
+                const base = { 'Name': student.name, 'Roll': student.rollNumber, 'Class': student.class, 'Grade': student.grade, 'Phone': student.phoneNumber || 'N/A', 'Fees': student.totalFees, 'Paid': totalPaid, 'Discount': totalDiscount, 'Due': remainingBalance };
+                if((student.payments||[]).length === 0 && (student.discounts||[]).length === 0) dataToExport.push({...base, Type: 'N/A', Amount: 'N/A', Date: 'N/A'});
+                (student.payments||[]).forEach(p => dataToExport.push({ ...base, Type: 'Payment', Amount: p.amount, Date: formatDateTime(p.date) }));
+                (student.discounts||[]).forEach(d => dataToExport.push({ ...base, Type: 'Discount', Amount: d.amount, Date: formatDateTime(d.date) }));
+            });
+            return dataToExport;
+        };
+        const exportPDF = (title, head, body, name, addToast) => {
+            try {
+                const doc = new jsPDF();
+                doc.text(title, 14, 15);
+                autoTable(doc, { head, body, startY: 20 });
+                doc.save(name);
+                addToast("PDF Exported", ToastType.Success);
+            } catch(e) { console.error(e); addToast("PDF Error", ToastType.Error); }
+        };
+        const exportExcel = (data, sheet, name, addToast) => {
+            try {
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(data), sheet);
+                XLSX.writeFile(wb, name);
+                addToast("Excel Exported", ToastType.Success);
+            } catch(e) { console.error(e); addToast("Excel Error", ToastType.Error); }
+        };
 
+        // --- COMPONENTS ---
         const ToastContainer = () => {
             const { toasts, removeToast } = useToast();
-            const icons = {
-                [ToastType.Success]: <CheckCircle className="text-emerald-500" size={24} />,
-                [ToastType.Error]: <XCircle className="text-red-500" size={24} />,
-                [ToastType.Info]: <Info className="text-sky-500" size={24} />,
-            };
-            const toastColors = {
-                [ToastType.Success]: 'bg-emerald-100 border-emerald-400',
-                [ToastType.Error]: 'bg-red-100 border-red-400',
-                [ToastType.Info]: 'bg-sky-100 border-sky-400',
-            }
-            return (
-                <div className="fixed top-5 right-5 z-[100] space-y-3 w-full max-w-sm">
-                    {toasts.map(toast => (
-                        <div key={toast.id} className={`relative w-full p-4 pr-10 rounded-lg shadow-lg flex items-center gap-4 animate-fade-in-right ${toastColors[toast.type]} border`}>
-                            {icons[toast.type]}
-                            <p className="text-sm text-slate-800 font-medium">{toast.message}</p>
-                            <button onClick={() => removeToast(toast.id)} className="absolute top-1/2 -translate-y-1/2 right-3 text-slate-500 hover:text-slate-800"><X size={18} /></button>
-                        </div>
-                    ))}
-                </div>
-            );
+            const colors = { [ToastType.Success]: 'bg-emerald-100 text-emerald-800', [ToastType.Error]: 'bg-red-100 text-red-800', [ToastType.Info]: 'bg-sky-100 text-sky-800' };
+            return <div className="fixed top-5 right-5 z-50 flex flex-col gap-2">{toasts.map(t => <div key={t.id} className={`p-4 rounded shadow-lg flex items-center gap-3 ${colors[t.type]} animate-fade-in-right`}>{t.type===ToastType.Success?<CheckCircle size={20}/>:t.type===ToastType.Error?<XCircle size={20}/>:<Info size={20}/>}<span className="font-medium">{t.message}</span><button onClick={()=>removeToast(t.id)}><X size={16}/></button></div>)}</div>;
         };
 
         const ConfirmationModal = ({ isOpen, onClose, onConfirm, title, message }) => {
             if (!isOpen) return null;
             return (
                 <div className="fixed inset-0 bg-slate-900 bg-opacity-75 flex items-center justify-center z-50 p-4">
-                    <div className="bg-white p-8 rounded-lg shadow-xl w-full max-w-sm relative animate-fade-in-down">
-                        <button onClick={onClose} className="absolute top-4 right-4 text-slate-500 hover:text-slate-700"><X size={24} /></button>
-                        <h2 className="text-2xl font-bold text-slate-800 mb-4">{title}</h2>
-                        <p className="text-slate-700 mb-6">{message}</p>
-                        <div className="flex justify-end space-x-4">
-                            <button onClick={onClose} className="bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold py-2 px-4 rounded-lg">Cancel</button>
-                            <button onClick={onConfirm} className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg">Confirm</button>
+                    <div className="bg-white p-6 rounded-lg shadow-xl max-w-sm w-full animate-fade-in-down">
+                        <h3 className="text-xl font-bold mb-2">{title}</h3>
+                        <p className="text-gray-600 mb-6">{message}</p>
+                        <div className="flex justify-end gap-3">
+                            <button onClick={onClose} className="px-4 py-2 rounded bg-gray-200">Cancel</button>
+                            <button onClick={onConfirm} className="px-4 py-2 rounded bg-red-600 text-white">Confirm</button>
                         </div>
                     </div>
                 </div>
             );
         };
-        
-        // NEW: AI Result Modal
-        const AIResultModal = ({ isOpen, onClose, title, content, isLoading }) => {
-            if (!isOpen) return null;
-            
-            const handleCopy = () => {
-                navigator.clipboard.writeText(content);
-                // Ideally show a small 'Copied!' hint, but we'll rely on user knowing it worked
-            };
 
-            return (
-                 <div className="fixed inset-0 bg-slate-900 bg-opacity-75 flex items-center justify-center z-50 p-4">
-                    <div className="bg-white p-8 rounded-xl shadow-2xl w-full max-w-2xl relative animate-fade-in-down max-h-[90vh] flex flex-col">
-                        <button onClick={onClose} className="absolute top-4 right-4 text-slate-500 hover:text-slate-700"><X size={24} /></button>
-                        <h2 className="text-2xl font-bold text-slate-800 mb-4 flex items-center">
-                           <Sparkles className="text-indigo-600 mr-2" size={24} /> {title}
-                        </h2>
-                        
-                        <div className="flex-grow overflow-y-auto mb-6 bg-slate-50 p-4 rounded-lg border border-slate-200">
-                            {isLoading ? (
-                                <div className="flex flex-col items-center justify-center py-12">
-                                    <Sparkles className="text-indigo-500 animate-spin-slow mb-4" size={48} />
-                                    <p className="text-slate-600 font-medium animate-pulse">Consulting Gemini AI...</p>
-                                </div>
-                            ) : (
-                                <div className="prose prose-slate max-w-none whitespace-pre-wrap text-slate-700">
-                                    {content}
-                                </div>
-                            )}
-                        </div>
-
-                        {!isLoading && (
-                            <div className="flex justify-end space-x-4">
-                                <button onClick={handleCopy} className="bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 font-bold py-2 px-4 rounded-lg flex items-center transition">
-                                    <Copy size={18} className="mr-2" /> Copy
-                                </button>
-                                <button onClick={onClose} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg transition">
-                                    Close
-                                </button>
-                            </div>
-                        )}
-                    </div>
-                </div>
-            );
-        };
-
-        // NEW: Permissions Modal
         const PermissionsModal = ({ isOpen, onClose, user, onSave }) => {
             if (!isOpen || !user) return null;
-            
-            const [localPermissions, setLocalPermissions] = useState(user.permissions);
-
-            const handleToggle = (key) => {
-                setLocalPermissions(prev => ({ ...prev, [key]: !prev[key] }));
-            };
-
-            const handleSave = () => {
-                onSave(user.email, localPermissions);
-                onClose();
-            };
-
-            const permissionLabels = {
-                canViewDashboardSummary: "View Dashboard Summary",
-                canViewStudents: "View Students",
-                canAddStudents: "Add Students",
-                canEditStudents: "Edit Students",
-                canDeleteStudents: "Delete Students",
-                canManagePayments: "Manage Payments",
-                canManageDiscounts: "Manage Discounts",
-                canViewReports: "View Reports",
-                canImportExport: "Import/Export Data",
-                canManageUsers: "Manage Users (Admin)"
-            };
-
+            const [perms, setPerms] = useState(user.permissions);
+            const toggle = (k) => setPerms(p => ({...p, [k]: !p[k]}));
             return (
                 <div className="fixed inset-0 bg-slate-900 bg-opacity-75 flex items-center justify-center z-50 p-4">
-                    <div className="bg-white p-8 rounded-xl shadow-xl w-full max-w-2xl relative animate-fade-in-down">
-                        <button onClick={onClose} className="absolute top-4 right-4 text-slate-500 hover:text-slate-700"><X size={24} /></button>
-                        <h2 className="text-2xl font-bold text-slate-800 mb-2">Edit Permissions</h2>
-                        <p className="text-slate-600 mb-6">For user: <span className="font-semibold">{user.email}</span></p>
-                        
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
-                            {Object.entries(localPermissions).map(([key, value]) => (
-                                <div key={key} className="flex items-center p-3 border rounded-lg hover:bg-slate-50 cursor-pointer" onClick={() => handleToggle(key)}>
-                                    <div className={`w-5 h-5 rounded border flex items-center justify-center mr-3 ${value ? 'bg-indigo-600 border-indigo-600' : 'border-slate-300 bg-white'}`}>
-                                        {value && <CheckCircle size={14} className="text-white" />}
-                                    </div>
-                                    <span className="text-slate-700 font-medium">{permissionLabels[key] || key}</span>
+                    <div className="bg-white p-6 rounded-lg shadow-xl max-w-2xl w-full animate-fade-in-down max-h-[90vh] overflow-y-auto">
+                        <h3 className="text-xl font-bold mb-4">Permissions: {user.email}</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
+                            {Object.keys(defaultUserPermissions).map(k => (
+                                <div key={k} onClick={() => toggle(k)} className={`p-3 rounded border cursor-pointer flex items-center gap-3 ${perms[k] ? 'bg-indigo-50 border-indigo-500' : 'bg-gray-50'}`}>
+                                    {perms[k] ? <CheckCircle size={18} className="text-indigo-600"/> : <div className="w-[18px] h-[18px] rounded-full border border-gray-400"/>}
+                                    <span className="text-sm font-medium">{k.replace(/can|(?=[A-Z])/g, ' ')}</span>
                                 </div>
                             ))}
                         </div>
-
-                        <div className="flex justify-end space-x-4">
-                            <button onClick={onClose} className="bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold py-2 px-4 rounded-lg">Cancel</button>
-                            <button onClick={handleSave} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg">Save Changes</button>
-                        </div>
+                        <div className="flex justify-end gap-3"><button onClick={onClose} className="px-4 py-2 rounded bg-gray-200">Cancel</button><button onClick={() => { onSave(user.email, perms); onClose(); }} className="px-4 py-2 rounded bg-indigo-600 text-white">Save</button></div>
                     </div>
                 </div>
             );
@@ -726,30 +496,23 @@
         );
 
         const AddPaymentModal = ({ student, onClose }) => {
-            const { addPayment } = useData();
-            const { addToast } = useToast();
-            const [amount, setAmount] = useState('');
-            const [remarks, setRemarks] = useState('');
-            const [date, setDate] = useState(formatISODateToYMD(new Date().toISOString()));
-
-            const handleSubmit = (e) => {
+            const { addPayment, addToast } = { ...useData(), ...useToast() };
+            const [form, setForm] = useState({ amount: '', remarks: '', date: formatISODateToYMD(new Date().toISOString()) });
+            const submit = (e) => {
                 e.preventDefault();
-                const parsedAmount = parseFloat(amount);
-                if (isNaN(parsedAmount) || parsedAmount <= 0) { addToast('Please enter a valid amount.', ToastType.Error); return; }
-                addPayment(student.id, { amount: parsedAmount, remarks, date: new Date(date).toISOString() });
-                addToast('Payment added successfully', ToastType.Success);
-                onClose();
+                if(Number(form.amount) <= 0) return addToast("Invalid amount", ToastType.Error);
+                addPayment(student.id, { ...form, amount: Number(form.amount), date: new Date(form.date).toISOString() });
+                addToast("Payment Added", ToastType.Success); onClose();
             };
-
             return (
                 <div className="fixed inset-0 bg-slate-900 bg-opacity-75 flex items-center justify-center z-50 p-4">
-                    <div className="bg-white p-8 rounded-lg shadow-xl w-full max-w-md relative animate-fade-in-down">
-                        <h2 className="text-2xl font-bold mb-6">Add Payment for {student.name}</h2>
-                        <form onSubmit={handleSubmit} className="space-y-4">
-                            <div><label className="block text-slate-700 text-sm font-bold mb-2">Amount (INR)</label><input type="number" value={amount} onChange={e => setAmount(e.target.value)} className="shadow appearance-none border rounded w-full py-2 px-3 focus:outline-none focus:ring-2 focus:ring-indigo-500" required /></div>
-                            <div><label className="block text-slate-700 text-sm font-bold mb-2">Date</label><input type="date" value={date} onChange={e => setDate(e.target.value)} className="shadow appearance-none border rounded w-full py-2 px-3 focus:outline-none focus:ring-2 focus:ring-indigo-500" required /></div>
-                            <div><label className="block text-slate-700 text-sm font-bold mb-2">Remarks</label><textarea value={remarks} onChange={e => setRemarks(e.target.value)} className="shadow appearance-none border rounded w-full py-2 px-3 h-24 focus:outline-none focus:ring-2 focus:ring-indigo-500" /></div>
-                            <div className="flex justify-end gap-4 pt-4"><button type="button" onClick={onClose} className="bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold py-2 px-4 rounded-lg">Cancel</button><button type="submit" className="bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-2 px-4 rounded-lg">Add Payment</button></div>
+                    <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-md animate-fade-in-down">
+                        <h3 className="text-xl font-bold mb-4">Add Payment</h3>
+                        <form onSubmit={submit} className="space-y-3">
+                            <input type="number" className="w-full border p-2 rounded" placeholder="Amount" value={form.amount} onChange={e=>setForm({...form, amount:e.target.value})} required/>
+                            <input type="date" className="w-full border p-2 rounded" value={form.date} onChange={e=>setForm({...form, date:e.target.value})} required/>
+                            <textarea className="w-full border p-2 rounded" placeholder="Remarks" value={form.remarks} onChange={e=>setForm({...form, remarks:e.target.value})}/>
+                            <div className="flex justify-end gap-2"><button type="button" onClick={onClose} className="px-4 py-2 bg-gray-200 rounded">Cancel</button><button className="px-4 py-2 bg-emerald-600 text-white rounded">Add</button></div>
                         </form>
                     </div>
                 </div>
@@ -757,32 +520,45 @@
         };
 
         const AddDiscountModal = ({ student, onClose }) => {
-            const { addDiscount } = useData();
-            const { addToast } = useToast();
-            const [amount, setAmount] = useState('');
-            const [reason, setReason] = useState('');
-            const [date, setDate] = useState(formatISODateToYMD(new Date().toISOString()));
-
-            const handleSubmit = (e) => {
+            const { addDiscount, addToast } = { ...useData(), ...useToast() };
+            const [form, setForm] = useState({ amount: '', reason: '', date: formatISODateToYMD(new Date().toISOString()) });
+            const submit = (e) => {
                 e.preventDefault();
-                const parsedAmount = parseFloat(amount);
-                if (isNaN(parsedAmount) || parsedAmount <= 0) { addToast('Please enter a valid amount.', ToastType.Error); return; }
-                if (!reason.trim()) { addToast('Please enter a reason for the discount.', ToastType.Error); return; }
-                addDiscount(student.id, { amount: parsedAmount, reason, date: new Date(date).toISOString() });
-                addToast('Discount added successfully', ToastType.Success);
-                onClose();
+                if(Number(form.amount) <= 0) return addToast("Invalid amount", ToastType.Error);
+                addDiscount(student.id, { ...form, amount: Number(form.amount), date: new Date(form.date).toISOString() });
+                addToast("Discount Added", ToastType.Success); onClose();
             };
-
             return (
                 <div className="fixed inset-0 bg-slate-900 bg-opacity-75 flex items-center justify-center z-50 p-4">
-                    <div className="bg-white p-8 rounded-lg shadow-xl w-full max-w-md relative animate-fade-in-down">
-                        <h2 className="text-2xl font-bold mb-6">Add Discount for {student.name}</h2>
-                        <form onSubmit={handleSubmit} className="space-y-4">
-                            <div><label className="block text-slate-700 text-sm font-bold mb-2">Amount (INR)</label><input type="number" value={amount} onChange={e => setAmount(e.target.value)} className="shadow appearance-none border rounded w-full py-2 px-3 focus:outline-none focus:ring-2 focus:ring-indigo-500" required /></div>
-                            <div><label className="block text-slate-700 text-sm font-bold mb-2">Date</label><input type="date" value={date} onChange={e => setDate(e.target.value)} className="shadow appearance-none border rounded w-full py-2 px-3 focus:outline-none focus:ring-2 focus:ring-indigo-500" required /></div>
-                            <div><label className="block text-slate-700 text-sm font-bold mb-2">Reason</label><textarea value={reason} onChange={e => setReason(e.target.value)} className="shadow appearance-none border rounded w-full py-2 px-3 h-24 focus:outline-none focus:ring-2 focus:ring-indigo-500" required /></div>
-                            <div className="flex justify-end gap-4 pt-4"><button type="button" onClick={onClose} className="bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold py-2 px-4 rounded-lg">Cancel</button><button type="submit" className="bg-amber-500 hover:bg-amber-600 text-white font-bold py-2 px-4 rounded-lg">Add Discount</button></div>
+                    <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-md animate-fade-in-down">
+                        <h3 className="text-xl font-bold mb-4">Add Discount</h3>
+                        <form onSubmit={submit} className="space-y-3">
+                            <input type="number" className="w-full border p-2 rounded" placeholder="Amount" value={form.amount} onChange={e=>setForm({...form, amount:e.target.value})} required/>
+                            <input type="date" className="w-full border p-2 rounded" value={form.date} onChange={e=>setForm({...form, date:e.target.value})} required/>
+                            <textarea className="w-full border p-2 rounded" placeholder="Reason" value={form.reason} onChange={e=>setForm({...form, reason:e.target.value})} required/>
+                            <div className="flex justify-end gap-2"><button type="button" onClick={onClose} className="px-4 py-2 bg-gray-200 rounded">Cancel</button><button className="px-4 py-2 bg-amber-500 text-white rounded">Add</button></div>
                         </form>
+                    </div>
+                </div>
+            );
+        };
+
+        const AIResultModal = ({ isOpen, onClose, title, content, isLoading }) => {
+            if (!isOpen) return null;
+            const handleCopy = () => navigator.clipboard.writeText(content);
+            return (
+                 <div className="fixed inset-0 bg-slate-900 bg-opacity-75 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white p-8 rounded-xl shadow-2xl w-full max-w-2xl relative animate-fade-in-down max-h-[90vh] flex flex-col">
+                        <button onClick={onClose} className="absolute top-4 right-4 text-slate-500 hover:text-slate-700"><X size={24} /></button>
+                        <h2 className="text-2xl font-bold text-slate-800 mb-4 flex items-center"><Sparkles className="text-indigo-600 mr-2" size={24} /> {title}</h2>
+                        <div className="flex-grow overflow-y-auto mb-6 bg-slate-50 p-4 rounded-lg border border-slate-200">
+                            {isLoading ? (
+                                <div className="flex flex-col items-center justify-center py-12"><Sparkles className="text-indigo-500 animate-spin-slow mb-4" size={48} /><p className="text-slate-600 font-medium animate-pulse">Consulting Gemini AI...</p></div>
+                            ) : (<div className="prose prose-slate max-w-none whitespace-pre-wrap text-slate-700">{content}</div>)}
+                        </div>
+                        {!isLoading && (
+                            <div className="flex justify-end space-x-4"><button onClick={handleCopy} className="bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 font-bold py-2 px-4 rounded-lg flex items-center transition"><Copy size={18} className="mr-2" /> Copy</button><button onClick={onClose} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg transition">Close</button></div>
+                        )}
                     </div>
                 </div>
             );
@@ -796,49 +572,19 @@
             const reportsTimeoutRef = useRef(null);
             const adminTimeoutRef = useRef(null);
 
-            const handleMouseEnter = (setter, timeoutRef) => {
-                if (timeoutRef.current) clearTimeout(timeoutRef.current);
-                setter(true);
-            };
-            const handleMouseLeave = (setter, timeoutRef) => {
-                timeoutRef.current = setTimeout(() => { setter(false); }, 500);
-            };
-            const activeLinkClass = { color: '#818cf8' };
+            const handleMouseEnter = (setter, timeoutRef) => { if (timeoutRef.current) clearTimeout(timeoutRef.current); setter(true); };
+            const handleMouseLeave = (setter, timeoutRef) => { timeoutRef.current = setTimeout(() => { setter(false); }, 500); };
 
             return (
-                <nav className="bg-slate-900 text-white p-4 shadow-lg">
-                    <div className="container mx-auto flex flex-wrap justify-between items-center">
-                        <h1 className="text-xl md:text-2xl font-bold cursor-pointer mb-2 sm:mb-0" onClick={() => navigate('/')}>
-                            {APP_NAME.split(' ')[0]}<span className="text-indigo-400">{APP_NAME.split(' ')[1]}</span>
-                        </h1>
+                <nav className="bg-slate-900 text-white p-4 shadow-lg sticky top-0 z-40">
+                    <div className="max-w-7xl mx-auto flex justify-between items-center">
+                        <div className="flex items-center gap-2 cursor-pointer" onClick={()=>navigate('/')}><div className="bg-indigo-500 p-1.5 rounded"><BookCopy size={20}/></div><span className="font-bold text-xl">FeeManager Pro <span className="text-xs bg-emerald-500 text-white px-1 py-0.5 rounded ml-1">CLOUD</span></span></div>
                         {loggedInUser && (
-                            <div className="flex flex-wrap items-center space-x-1 sm:space-x-2 md:space-x-3">
-                                <Link to="/" className="hover:text-indigo-300 px-2 py-1 rounded-md text-xs sm:text-sm">Dashboard</Link>
-                                {loggedInUser.permissions.canViewReports && (
-                                    <div className="relative" onMouseEnter={() => handleMouseEnter(setReportsDropdownOpen, reportsTimeoutRef)} onMouseLeave={() => handleMouseLeave(setReportsDropdownOpen, reportsTimeoutRef)}>
-                                        <button className="hover:text-indigo-300 px-2 py-1 rounded-md text-xs sm:text-sm flex items-center">Reports <ChevronDown size={16} className="ml-1"/></button>
-                                        {reportsDropdownOpen && (
-                                            <div className="absolute left-0 mt-1 w-48 bg-slate-800 rounded-md shadow-lg py-1 z-20">
-                                                <Link to="/reports/summary" className="block px-4 py-2 text-xs sm:text-sm text-white hover:bg-slate-700 rounded-md flex items-center"><BarChart3 size={16} className="mr-2"/> Summary</Link>
-                                                <Link to="/reports/daily" className="block px-4 py-2 text-xs sm:text-sm text-white hover:bg-slate-700 rounded-md flex items-center"><CalendarDays size={16} className="mr-2"/> Daily</Link>
-                                                <Link to="/reports/monthly" className="block px-4 py-2 text-xs sm:text-sm text-white hover:bg-slate-700 rounded-md flex items-center"><CalendarDays size={16} className="mr-2"/> Monthly</Link>
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
-                                {loggedInUser.role === 'admin' && (
-                                    <div className="relative" onMouseEnter={() => handleMouseEnter(setAdminDropdownOpen, adminTimeoutRef)} onMouseLeave={() => handleMouseLeave(setAdminDropdownOpen, adminTimeoutRef)}>
-                                        <button className="hover:text-indigo-300 px-2 py-1 rounded-md text-xs sm:text-sm flex items-center">Admin <ChevronDown size={16} className="ml-1"/></button>
-                                        {adminDropdownOpen && (
-                                            <div className="absolute left-0 mt-1 w-52 bg-slate-800 rounded-md shadow-lg py-1 z-20">
-                                                <Link to="/admin/users" className="block px-4 py-2 text-xs sm:text-sm text-white hover:bg-slate-700 rounded-md flex items-center"><UserCog size={16} className="mr-2"/> Users</Link>
-                                                <Link to="/admin/settings" className="block px-4 py-2 text-xs sm:text-sm text-white hover:bg-slate-700 rounded-md flex items-center"><ShieldCheck size={16} className="mr-2"/> Settings</Link>
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
-                                <span className="text-slate-300 text-xs sm:text-sm hidden md:inline">| {loggedInUser.email}</span>
-                                <button onClick={() => { logout(); navigate('/login'); }} className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded-md text-xs sm:text-sm flex items-center"><LogOut size={16} className="mr-1"/> Logout</button>
+                            <div className="flex items-center gap-4 text-sm">
+                                <Link to="/" className="hover:text-indigo-300">Dashboard</Link>
+                                {loggedInUser.permissions.canViewReports && <div className="relative" onMouseEnter={()=>handleMouseEnter(setReportsDropdownOpen, reportsTimeoutRef)} onMouseLeave={()=>handleMouseLeave(setReportsDropdownOpen, reportsTimeoutRef)}><button className="hover:text-indigo-300 flex items-center py-2">Reports <ChevronDown size={14}/></button>{reportsDropdownOpen && <div className="absolute right-0 mt-0 w-40 bg-slate-800 rounded shadow-xl py-1"><Link to="/reports/summary" className="block px-4 py-2 hover:bg-slate-700">📊 Summary</Link><Link to="/reports/daily" className="block px-4 py-2 hover:bg-slate-700">📅 Daily</Link><Link to="/reports/monthly" className="block px-4 py-2 hover:bg-slate-700">🗓️ Monthly</Link></div>}</div>}
+                                {loggedInUser.role === 'admin' && <div className="relative" onMouseEnter={()=>handleMouseEnter(setAdminDropdownOpen, adminTimeoutRef)} onMouseLeave={()=>handleMouseLeave(setAdminDropdownOpen, adminTimeoutRef)}><button className="hover:text-indigo-300 flex items-center py-2">Admin <ChevronDown size={14}/></button>{adminDropdownOpen && <div className="absolute right-0 mt-0 w-40 bg-slate-800 rounded shadow-xl py-1"><Link to="/admin/users" className="block px-4 py-2 hover:bg-slate-700">👥 Users</Link><Link to="/admin/settings" className="block px-4 py-2 hover:bg-slate-700">⚙️ Settings</Link></div>}</div>}
+                                <button onClick={()=>{logout(); navigate('/login')}} className="flex items-center gap-1 bg-red-600 px-3 py-1.5 rounded hover:bg-red-700"><LogOut size={14}/> Logout</button>
                             </div>
                         )}
                     </div>
@@ -864,28 +610,38 @@
 
         const LoginPage = () => {
             const [email, setEmail] = useState('');
-            const [password, setPassword] = useState('');
-            const [showPassword, setShowPassword] = useState(false);
-            const [error, setError] = useState('');
-            const navigate = useNavigate();
+            const [pass, setPass] = useState('');
             const { login } = useAuth();
+            const navigate = useNavigate();
+            const [error, setError] = useState('');
 
             const handleSubmit = (e) => {
                 e.preventDefault();
                 setError('');
-                if (login(email, password)) navigate('/');
-                else setError('Invalid email or password.');
+                if (login(email, pass)) {
+                    navigate('/');
+                } else {
+                    setError('Invalid email or password.');
+                }
             };
 
             return (
-                <div className="flex items-center justify-center min-h-screen bg-slate-50">
-                    <div className="bg-white p-8 rounded-lg shadow-xl w-full max-w-md m-4">
+                <div className="min-h-screen flex items-center justify-center bg-slate-100 p-4">
+                    <div className="bg-white p-8 rounded-xl shadow-xl w-full max-w-md m-4">
                         <h2 className="text-3xl font-bold text-center text-slate-800 mb-6">Login to {APP_NAME.split(' ')[0]}<span className="text-indigo-500">{APP_NAME.split(' ')[1]}</span></h2>
                         <form onSubmit={handleSubmit}>
-                            <div className="mb-4"><label className="block text-slate-600 text-sm font-bold mb-2">Email</label><input type="email" className="shadow appearance-none border rounded-lg w-full py-3 px-4 text-slate-700 focus:ring-2 focus:ring-indigo-500" value={email} onChange={e => setEmail(e.target.value)} required /></div>
-                            <div className="mb-6"><label className="block text-slate-600 text-sm font-bold mb-2">Password</label><div className="relative"><input type={showPassword ? 'text' : 'password'} className="shadow appearance-none border rounded-lg w-full py-3 px-4 text-slate-700 mb-3 focus:ring-2 focus:ring-indigo-500" value={password} onChange={e => setPassword(e.target.value)} required /><button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-500">{showPassword ? <Eye size={20} /> : <Eye size={20} />}</button></div></div>
-                            {error && <p className="text-red-500 text-center text-sm mb-4">{error}</p>}
+                            <div className="mb-4"><label className="block text-slate-600 text-sm font-bold mb-2">Email</label><input type="email" className="shadow appearance-none border rounded-lg w-full py-3 px-4 text-slate-700 focus:ring-2 focus:ring-indigo-500" value={email} onChange={e => setEmail(e.target.value)} required placeholder="admin@school.com" /></div>
+                            <div className="mb-6"><label className="block text-slate-600 text-sm font-bold mb-2">Password</label><input type="password" className="shadow appearance-none border rounded-lg w-full py-3 px-4 text-slate-700 mb-3 focus:ring-2 focus:ring-indigo-500" value={pass} onChange={e => setPass(e.target.value)} required placeholder="admin" /></div>
+                            
+                            {error && (
+                                <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded flex items-center">
+                                    <AlertCircle size={18} className="mr-2 flex-shrink-0" />
+                                    <span className="text-sm">{error}</span>
+                                </div>
+                            )}
+                            
                             <div className="flex items-center justify-between"><button type="submit" className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-lg w-full transform transition duration-150 hover:scale-105">Sign In</button></div>
+                            <div className="mt-4 text-center text-xs text-gray-500">Default: admin@school.com / admin</div>
                         </form>
                     </div>
                 </div>
@@ -904,8 +660,6 @@
             const [sortConfig, setSortConfig] = useState({ key: 'name', direction: 'ascending' });
             const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
             const [studentToDelete, setStudentToDelete] = useState(null);
-            
-            // AI Insights State
             const [isAIModalOpen, setIsAIModalOpen] = useState(false);
             const [aiContent, setAiContent] = useState('');
             const [isAILoading, setIsAILoading] = useState(false);
@@ -942,11 +696,17 @@
             const handleExportExcel = () => {
                 if (!loggedInUser?.permissions.canImportExport) return addToast("Permission denied.", ToastType.Error);
                 const data = prepareStudentListForExport(students);
-                if (exportToExcel(data, "student_list").success) addToast("Exported successfully!", ToastType.Success);
+                exportExcel(data, "Students", "student_list.xlsx", addToast);
             };
             const handleExportPdf = () => {
                 if (!loggedInUser?.permissions.canImportExport) return addToast("Permission denied.", ToastType.Error);
-                if (exportToPdf(sortedStudents, "student_financial_report").success) addToast("Exported successfully!", ToastType.Success);
+                const doc = new jsPDF();
+                doc.text("Student Financial Report", 14, 16);
+                const tableColumn = ["Name", "Roll No.", "Class", "Total Fees", "Total Paid", "Balance Due"];
+                const tableRows = sortedStudents.map(s => [s.name, s.rollNumber, s.class, `INR ${s.totalFees}`, `INR ${s.totalPaid}`, `INR ${s.remainingBalance}`]);
+                autoTable(doc, { head: [tableColumn], body: tableRows, startY: 20 });
+                doc.save("student_report.pdf");
+                addToast("PDF Exported", ToastType.Success);
             };
             const handleFileImport = (e) => {
                 const file = e.target.files?.[0];
@@ -954,60 +714,25 @@
                 const reader = new FileReader();
                 reader.onload = (evt) => {
                     try {
-                        const workbook = XLSX.read(evt.target?.result, { type: 'array' });
-                        const json = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
-                        const imported = json.map(row => ({ 
-                            name: row['Name'], 
-                            rollNumber: String(row['Roll Number'] || row['RollNo'] || ''), 
-                            class: String(row['Class'] || ''), 
-                            grade: String(row['Grade'] || ''), 
-                            phoneNumber: String(row['Phone'] || ''),
-                            totalFees: parseFloat(row['Total Fees']) 
-                        })).filter(s => s.name && s.rollNumber && !isNaN(s.totalFees) && s.totalFees > 0);
-                        
-                        if (imported.length > 0) { 
-                            const { newCount, updatedCount } = importStudents(imported); 
-                            addToast(`Imported ${newCount} new, updated ${updatedCount}.`, ToastType.Success); 
-                        } else {
-                            addToast('No valid data found.', ToastType.Error);
-                        }
+                        const wb = XLSX.read(evt.target?.result, { type: 'array' });
+                        const json = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
+                        const imported = json.map(row => ({ name: row['Name'], rollNumber: String(row['Roll Number'] || row['RollNo'] || ''), class: String(row['Class'] || ''), grade: String(row['Grade'] || ''), phoneNumber: String(row['Phone']||''), totalFees: parseFloat(row['Total Fees']) })).filter(s => s.name && s.rollNumber && !isNaN(s.totalFees) && s.totalFees > 0);
+                        if (imported.length > 0) { const { newCount, updatedCount } = importStudents(imported); addToast(`Imported ${newCount} new, updated ${updatedCount}.`, ToastType.Success); } else addToast('No valid data found.', ToastType.Error);
                     } catch (err) { addToast("Failed to process file.", ToastType.Error); } finally { if (fileInputRef.current) fileInputRef.current.value = ""; }
                 };
                 reader.readAsArrayBuffer(file);
             };
 
-            // NEW: AI Insights Handler
             const handleGenerateInsights = async () => {
-                setIsAIModalOpen(true);
-                setIsAILoading(true);
-                setAiContent('');
+                setIsAIModalOpen(true); setIsAILoading(true); setAiContent('');
                 try {
-                    const prompt = `
-                        Act as a professional financial analyst for a school.
-                        Analyze the following data:
-                        - Total Students: ${dashboardSummary.totalStudents}
-                        - Total Fees Expected: ${dashboardSummary.totalFees}
-                        - Total Collected: ${dashboardSummary.totalPaid}
-                        - Total Pending: ${dashboardSummary.totalPending}
-                        - Collection Rate: ${((dashboardSummary.totalPaid / dashboardSummary.totalFees) * 100).toFixed(2)}%
-
-                        Please provide:
-                        1. A 3-sentence Executive Summary of the financial health.
-                        2. Three concise, actionable bullet points to improve fee collection efficiency.
-                        
-                        Keep the tone professional and encouraging.
-                    `;
+                    const prompt = `Analyze: Students:${dashboardSummary.totalStudents}, Fees:${dashboardSummary.totalFees}, Paid:${dashboardSummary.totalPaid}, Pending:${dashboardSummary.totalPending}. Give 3 bullets on health & 2 tips.`;
                     const content = await generateAIContent(prompt);
                     setAiContent(content);
-                } catch (error) {
-                    setAiContent("Failed to generate insights. Please try again later.");
-                    addToast("AI generation failed", ToastType.Error);
-                } finally {
-                    setIsAILoading(false);
-                }
+                } catch (error) { setAiContent("Failed to generate insights."); addToast("AI Error", ToastType.Error); } finally { setIsAILoading(false); }
             };
 
-            if (students.length === 0) return <div className="container mx-auto p-4"><EmptyState icon={<Users size={48} className="text-indigo-600" />} title="No Student Records" message="Add your first student." actionButton={loggedInUser?.permissions.canAddStudents ? <button onClick={() => navigate('/student/new')} className="bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-3 px-6 rounded-lg flex items-center"><PlusCircle size={22} className="mr-2" /> Add Student</button> : null} /></div>;
+            if (students.length === 0) return <div className="container mx-auto p-4"><EmptyState icon={<Users size={48} className="text-indigo-600" />} title="No Student Records" message="Add your first student to the cloud database." actionButton={loggedInUser?.permissions.canAddStudents ? <button onClick={() => navigate('/student/new')} className="bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-3 px-6 rounded-lg flex items-center"><PlusCircle size={22} className="mr-2" /> Add Student</button> : null} /></div>;
 
             const SummaryCard = ({ title, value, icon, isCurrency, isWarning }) => (
                 <div className="bg-white p-6 rounded-xl shadow-lg flex items-center gap-4 hover:scale-[1.03] transition-all">
@@ -1020,12 +745,8 @@
                 <div className="container mx-auto p-4 sm:p-6 lg:p-8">
                     <div className="flex flex-wrap justify-between items-center mb-6 gap-4">
                         <h2 className="text-3xl font-extrabold text-slate-900 flex items-center"><BarChart3 className="mr-3 text-indigo-600" size={32} /> Dashboard</h2>
-                        {/* NEW: AI Insights Button */}
-                        <button onClick={handleGenerateInsights} className="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-lg shadow-lg hover:shadow-xl flex items-center transition transform hover:-translate-y-0.5">
-                            <Sparkles size={18} className="mr-2" /> AI Financial Insights
-                        </button>
+                        <button onClick={handleGenerateInsights} className="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-lg shadow-lg hover:shadow-xl flex items-center transition transform hover:-translate-y-0.5"><Sparkles size={18} className="mr-2" /> AI Insights</button>
                     </div>
-
                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 mb-8">
                         <SummaryCard title="Total Students" value={dashboardSummary.totalStudents} icon={<Users size={24} />} />
                         <SummaryCard title="Unique Classes" value={uniqueClasses.length} icon={<BookCopy size={24} />} />
@@ -1075,29 +796,20 @@
                         </table>
                     </div>
                     <ConfirmationModal isOpen={isConfirmModalOpen} onClose={() => setIsConfirmModalOpen(false)} onConfirm={() => { deleteStudent(studentToDelete); addToast("Deleted.", ToastType.Success); setIsConfirmModalOpen(false); }} title="Confirm Deletion" message="Are you sure you want to delete this student?" />
-                    
-                    {/* AI Modal */}
-                    <AIResultModal 
-                        isOpen={isAIModalOpen} 
-                        onClose={() => setIsAIModalOpen(false)} 
-                        title="AI Financial Insights" 
-                        content={aiContent} 
-                        isLoading={isAILoading} 
-                    />
+                    <AIResultModal isOpen={isAIModalOpen} onClose={() => setIsAIModalOpen(false)} title="AI Financial Insights" content={aiContent} isLoading={isAILoading} />
                 </div>
             );
         };
 
         const StudentAddPage = () => {
             const navigate = useNavigate();
-            const { addStudent, students } = useData();
+            const { addStudent } = useData();
             const { addToast } = useToast();
             const [form, setForm] = useState({ name: '', rollNumber: '', class: '', grade: '', phoneNumber: '', totalFees: '' });
 
             const handleSubmit = (e) => {
                 e.preventDefault();
                 if (!form.name || !form.rollNumber || !form.class || !form.grade || !form.totalFees) return addToast("All fields required.", ToastType.Error);
-                if (students.some(s => s.rollNumber.toLowerCase() === form.rollNumber.toLowerCase().trim())) return addToast("Roll number exists.", ToastType.Error);
                 addStudent({ 
                     name: form.name.trim(), 
                     rollNumber: form.rollNumber.trim(), 
@@ -1117,12 +829,12 @@
                     <div className="bg-white p-8 rounded-xl shadow-lg max-w-2xl mx-auto">
                         <h2 className="text-2xl font-bold text-slate-800 mb-6 flex items-center"><UserPlus size={24} className="mr-3 text-emerald-600" /> Add Student</h2>
                         <form onSubmit={handleSubmit} className="space-y-4">
-                            <div><label className="block font-bold mb-1 text-sm text-slate-600">Roll Number</label><input type="text" id="rollNumber" value={form.rollNumber} onChange={handleChange} className="border rounded w-full py-2 px-3 focus:ring-2 focus:ring-indigo-500" required /></div>
-                            <div><label className="block font-bold mb-1 text-sm text-slate-600">Name</label><input type="text" id="name" value={form.name} onChange={handleChange} className="border rounded w-full py-2 px-3 focus:ring-2 focus:ring-indigo-500" required /></div>
-                            <div><label className="block font-bold mb-1 text-sm text-slate-600">Class</label><input type="text" id="class" value={form.class} onChange={handleChange} className="border rounded w-full py-2 px-3 focus:ring-2 focus:ring-indigo-500" required /></div>
-                            <div><label className="block font-bold mb-1 text-sm text-slate-600">Grade</label><input type="text" id="grade" value={form.grade} onChange={handleChange} className="border rounded w-full py-2 px-3 focus:ring-2 focus:ring-indigo-500" required /></div>
-                            <div><label className="block font-bold mb-1 text-sm text-slate-600">Phone Number</label><input type="tel" id="phoneNumber" value={form.phoneNumber} onChange={handleChange} className="border rounded w-full py-2 px-3 focus:ring-2 focus:ring-indigo-500" /></div>
-                            <div><label className="block font-bold mb-1 text-sm text-slate-600">Total Fees</label><input type="number" id="totalFees" value={form.totalFees} onChange={handleChange} className="border rounded w-full py-2 px-3 focus:ring-2 focus:ring-indigo-500" required min="1" /></div>
+                            <div><label className="block font-bold mb-1 text-sm text-slate-600">Roll Number</label><input type="text" id="rollNumber" value={form.rollNumber} onChange={handleChange} className="border rounded w-full py-2 px-3" required /></div>
+                            <div><label className="block font-bold mb-1 text-sm text-slate-600">Name</label><input type="text" id="name" value={form.name} onChange={handleChange} className="border rounded w-full py-2 px-3" required /></div>
+                            <div><label className="block font-bold mb-1 text-sm text-slate-600">Class</label><input type="text" id="class" value={form.class} onChange={handleChange} className="border rounded w-full py-2 px-3" required /></div>
+                            <div><label className="block font-bold mb-1 text-sm text-slate-600">Grade</label><input type="text" id="grade" value={form.grade} onChange={handleChange} className="border rounded w-full py-2 px-3" required /></div>
+                            <div><label className="block font-bold mb-1 text-sm text-slate-600">Phone Number</label><input type="tel" id="phoneNumber" value={form.phoneNumber} onChange={handleChange} className="border rounded w-full py-2 px-3" /></div>
+                            <div><label className="block font-bold mb-1 text-sm text-slate-600">Total Fees</label><input type="number" id="totalFees" value={form.totalFees} onChange={handleChange} className="border rounded w-full py-2 px-3" required min="1" /></div>
                             <div className="pt-4 flex justify-end"><button type="submit" className="bg-emerald-600 text-white font-bold py-2 px-4 rounded hover:bg-emerald-700">Add Student</button></div>
                         </form>
                     </div>
@@ -1179,8 +891,6 @@
             const { addToast } = useToast();
             const [student, setStudent] = useState(null);
             const [modal, setModal] = useState(null);
-
-            // AI Reminder State
             const [isAIModalOpen, setIsAIModalOpen] = useState(false);
             const [aiContent, setAiContent] = useState('');
             const [isAILoading, setIsAILoading] = useState(false);
@@ -1190,103 +900,45 @@
                 if (s) setStudent(s); else navigate('/404');
             }, [id, students]);
             
-            // NEW: AI Reminder Handler
             const handleGenerateReminder = async () => {
                 if (!student) return;
                 const { remainingBalance } = calculateFeeDetails(student);
-                
-                if (remainingBalance <= 0) {
-                    addToast("No pending balance to remind about.", ToastType.Info);
-                    return;
-                }
-
-                setIsAIModalOpen(true);
-                setIsAILoading(true);
-                setAiContent('');
-                
+                if (remainingBalance <= 0) { addToast("No pending balance to remind about.", ToastType.Info); return; }
+                setIsAIModalOpen(true); setIsAILoading(true); setAiContent('');
                 try {
-                    const prompt = `
-                        Act as a polite school administrator.
-                        Write a fee payment reminder message to the parents of the following student:
-                        - Student Name: ${student.name}
-                        - Roll Number: ${student.rollNumber}
-                        - Class: ${student.class}
-                        - Phone: ${student.phoneNumber || 'N/A'}
-                        - Outstanding Balance: INR ${remainingBalance}
-                        
-                        Format: suitable for WhatsApp or Email.
-                        Tone: Polite, professional, and firm but kind.
-                        Length: Under 150 words.
-                    `;
+                    const prompt = `Draft fee reminder for ${student.name}, Roll: ${student.rollNumber}, Due: ${remainingBalance}. Keep it polite.`;
                     const content = await generateAIContent(prompt);
                     setAiContent(content);
-                } catch (error) {
-                    setAiContent("Failed to draft reminder. Please try again later.");
-                    addToast("AI drafting failed", ToastType.Error);
-                } finally {
-                    setIsAILoading(false);
-                }
+                } catch (error) { setAiContent("Failed to draft reminder."); addToast("AI drafting failed", ToastType.Error); } finally { setIsAILoading(false); }
             };
 
             if (!student) return <div className="p-8 text-center">Loading...</div>;
             const { totalPaid, totalDiscount, remainingBalance } = calculateFeeDetails(student);
-            const history = [...student.payments.map(p => ({...p, type: 'Payment'})), ...student.discounts.map(d => ({...d, type: 'Discount'}))].sort((a,b) => new Date(b.date) - new Date(a.date));
+            const history = [...(student.payments||[]).map(p => ({...p, type: 'Payment'})), ...(student.discounts||[]).map(d => ({...d, type: 'Discount'}))].sort((a,b) => new Date(b.date) - new Date(a.date));
 
             return (
                 <div className="container mx-auto p-4 sm:p-8">
                     <button onClick={() => navigate('/')} className="mb-6 flex items-center text-indigo-600 font-semibold"><ChevronLeft size={20} className="mr-2" /> Dashboard</button>
                     <div className="bg-white p-6 rounded-xl shadow-lg mb-8">
                         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-4">
-                            <div>
-                                <h2 className="text-3xl font-extrabold text-slate-900 mb-2">{student.name}</h2>
-                                <div className="text-slate-600 space-x-4 flex flex-wrap">
-                                    <span>Roll: {student.rollNumber}</span>
-                                    <span>Class: {student.class}</span>
-                                    {student.phoneNumber && <span className="flex items-center"><Phone size={14} className="mr-1"/> {student.phoneNumber}</span>}
-                                </div>
-                            </div>
+                            <div><h2 className="text-3xl font-extrabold text-slate-900 mb-2">{student.name}</h2><div className="text-slate-600 space-x-4 flex flex-wrap"><span>Roll: {student.rollNumber}</span><span>Class: {student.class}</span>{student.phoneNumber && <span className="flex items-center"><Phone size={14} className="mr-1"/> {student.phoneNumber}</span>}</div></div>
                             {loggedInUser?.permissions.canEditStudents && <button onClick={() => navigate(`/student/${id}/edit`)} className="bg-indigo-500 text-white px-4 py-2 rounded shadow mt-4 md:mt-0">Edit</button>}
                         </div>
                     </div>
-                    
-                    <div className="bg-white p-6 rounded-xl shadow-lg mb-8 grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
                         <div className="p-4 bg-sky-50 rounded"><p className="font-medium">Fees</p><p className="text-xl font-bold text-sky-700">₹{student.totalFees}</p></div>
                         <div className="p-4 bg-emerald-50 rounded"><p className="font-medium">Paid</p><p className="text-xl font-bold text-emerald-700">₹{totalPaid}</p></div>
                         <div className="p-4 bg-amber-50 rounded"><p className="font-medium">Discount</p><p className="text-xl font-bold text-amber-700">₹{totalDiscount}</p></div>
                         <div className={`p-4 rounded ${remainingBalance > 0 ? 'bg-red-50' : 'bg-emerald-50'}`}><p className="font-medium">Due</p><p className={`text-xl font-bold ${remainingBalance > 0 ? 'text-red-700' : 'text-emerald-700'}`}>₹{remainingBalance}</p></div>
                     </div>
-                    
-                    {/* NEW: Reminder Button Area */}
-                     {remainingBalance > 0 && (
-                        <div className="bg-purple-50 border border-purple-100 p-4 rounded-xl shadow-sm mb-8 flex items-center justify-between">
-                            <div>
-                                <h4 className="font-bold text-purple-900 flex items-center"><BrainCircuit size={18} className="mr-2"/> AI Actions</h4>
-                                <p className="text-sm text-purple-700">Use AI to draft a professional payment reminder for this student.</p>
-                            </div>
-                            <button onClick={handleGenerateReminder} className="bg-purple-600 hover:bg-purple-700 text-white font-semibold py-2 px-4 rounded-lg shadow flex items-center transition">
-                                <Sparkles size={16} className="mr-2" /> Draft Reminder
-                            </button>
-                        </div>
-                    )}
-
+                     {remainingBalance > 0 && (<div className="bg-purple-50 border border-purple-100 p-4 rounded-xl shadow-sm mb-8 flex items-center justify-between"><div><h4 className="font-bold text-purple-900 flex items-center"><BrainCircuit size={18} className="mr-2"/> AI Actions</h4><p className="text-sm text-purple-700">Use AI to draft a professional payment reminder.</p></div><button onClick={handleGenerateReminder} className="bg-purple-600 hover:bg-purple-700 text-white font-semibold py-2 px-4 rounded-lg shadow flex items-center transition"><Sparkles size={16} className="mr-2" /> Draft Reminder</button></div>)}
                     <div className="bg-white p-6 rounded-xl shadow-lg">
                         <div className="flex justify-between items-center mb-4"><h3 className="text-xl font-semibold">Transactions</h3><div className="flex gap-2">{loggedInUser?.permissions.canManagePayments && <button onClick={() => setModal('payment')} className="bg-emerald-500 text-white px-3 py-1 rounded text-sm">Add Payment</button>}{loggedInUser?.permissions.canManageDiscounts && <button onClick={() => setModal('discount')} className="bg-amber-500 text-white px-3 py-1 rounded text-sm">Add Discount</button>}</div></div>
-                        <table className="min-w-full">
-                            <thead className="bg-slate-50"><tr><th className="px-4 py-2 text-left">Date</th><th className="px-4 py-2 text-left">Type</th><th className="px-4 py-2 text-left">Details</th><th className="px-4 py-2 text-right">Amount</th></tr></thead>
-                            <tbody>{history.map((t, i) => (<tr key={i} className="border-t"><td className="px-4 py-2 text-sm">{formatDateTime(t.date)}</td><td className="px-4 py-2"><span className={`px-2 py-0.5 rounded text-xs ${t.type === 'Payment' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>{t.type}</span></td><td className="px-4 py-2 text-sm">{t.remarks || t.reason}</td><td className="px-4 py-2 text-right font-bold text-sm">₹{t.amount}</td></tr>))}</tbody>
-                        </table>
+                        <table className="min-w-full"><thead className="bg-slate-50"><tr><th className="px-4 py-2 text-left">Date</th><th className="px-4 py-2 text-left">Type</th><th className="px-4 py-2 text-left">Details</th><th className="px-4 py-2 text-right">Amount</th></tr></thead><tbody>{history.map((t, i) => (<tr key={i} className="border-t"><td className="px-4 py-2 text-sm">{formatDateTime(t.date)}</td><td className="px-4 py-2"><span className={`px-2 py-0.5 rounded text-xs ${t.type === 'Payment' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>{t.type}</span></td><td className="px-4 py-2 text-sm">{t.remarks || t.reason}</td><td className="px-4 py-2 text-right font-bold text-sm">₹{t.amount}</td></tr>))}</tbody></table>
                     </div>
                     {modal === 'payment' && <AddPaymentModal student={student} onClose={() => setModal(null)} />}
                     {modal === 'discount' && <AddDiscountModal student={student} onClose={() => setModal(null)} />}
-                    
-                    {/* AI Modal */}
-                    <AIResultModal 
-                        isOpen={isAIModalOpen} 
-                        onClose={() => setIsAIModalOpen(false)} 
-                        title="Draft Fee Reminder" 
-                        content={aiContent} 
-                        isLoading={isAILoading} 
-                    />
+                    <AIResultModal isOpen={isAIModalOpen} onClose={() => setIsAIModalOpen(false)} title="Draft Fee Reminder" content={aiContent} isLoading={isAILoading} />
                 </div>
             );
         };
@@ -1314,45 +966,25 @@
             const COLORS = ['#10b981', '#f59e0b', '#ef4444'];
 
             const handleExportExcel = () => {
-                const classDataForExport = reportsData.classWisePending.map(c => ({
-                    'Class': c.name,
-                    'Pending Amount (INR)': c.pending
-                }));
-                const summaryDataForExport = reportsData.financialOverview.map(s => ({
-                    'Category': s.name,
-                    'Amount (INR)': s.value
-                }));
-                const result = exportReportToExcel(summaryDataForExport, classDataForExport, "financial_summary_report");
-                if (result.success) addToast("Exported to Excel!", ToastType.Success);
+                const classDataForExport = reportsData.classWisePending.map(c => ({ 'Class': c.name, 'Pending Amount (INR)': c.pending }));
+                const summaryDataForExport = reportsData.financialOverview.map(s => ({ 'Category': s.name, 'Amount (INR)': s.value }));
+                exportExcel([summaryDataForExport, classDataForExport], "Summary", "financial_summary.xlsx", addToast);
             };
 
             const handleExportPdf = () => {
-                const summaryCards = [
-                    { title: "Collected", value: reportsData.financialOverview[0].value, isCurrency: true },
-                    { title: "Pending", value: reportsData.financialOverview[2].value, isCurrency: true }
-                ];
-                const result = exportReportToPdf(summaryCards, reportsData.financialOverview, reportsData.classWisePending, "financial_summary_report");
-                if (result.success) addToast("Exported to PDF!", ToastType.Success);
+                const doc = new jsPDF();
+                doc.text("Financial Report", 14, 15);
+                autoTable(doc, { head: [['Metric', 'Value']], body: reportsData.financialOverview.map(s=>[s.name, s.value]), startY: 20 });
+                doc.save("financial_summary.pdf");
+                addToast("PDF Exported", ToastType.Success);
             };
 
             return (
                 <div className="container mx-auto p-4 sm:p-8">
-                    <div className="flex justify-between items-center mb-6">
-                        <h2 className="text-3xl font-bold text-slate-900">Financial Reports</h2>
-                        <div className="flex gap-2">
-                            <button onClick={handleExportExcel} className="bg-sky-600 text-white px-3 py-2 rounded flex items-center"><Download size={18} className="mr-2"/> Excel</button>
-                            <button onClick={handleExportPdf} className="bg-teal-600 text-white px-3 py-2 rounded flex items-center"><FileDown size={18} className="mr-2"/> PDF</button>
-                        </div>
-                    </div>
+                    <div className="flex justify-between items-center mb-6"><h2 className="text-3xl font-bold text-slate-900">Financial Reports</h2><div className="flex gap-2"><button onClick={handleExportExcel} className="bg-sky-600 text-white px-3 py-2 rounded flex items-center"><Download size={18} className="mr-2"/> Excel</button><button onClick={handleExportPdf} className="bg-teal-600 text-white px-3 py-2 rounded flex items-center"><FileDown size={18} className="mr-2"/> PDF</button></div></div>
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                        <div className="bg-white p-6 rounded-xl shadow-lg">
-                            <h3 className="text-xl font-semibold mb-4">Overview</h3>
-                            <ResponsiveContainer width="100%" height={300}><PieChart><Pie data={reportsData.financialOverview} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} fill="#8884d8" label>{reportsData.financialOverview.map((e, i) => <Cell key={`cell-${i}`} fill={COLORS[i % COLORS.length]} />)}</Pie><Tooltip /><Legend /></PieChart></ResponsiveContainer>
-                        </div>
-                        <div className="bg-white p-6 rounded-xl shadow-lg">
-                            <h3 className="text-xl font-semibold mb-4">Pending by Class</h3>
-                            <ResponsiveContainer width="100%" height={300}><BarChart data={reportsData.classWisePending}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="name" /><YAxis /><Tooltip /><Legend /><Bar dataKey="pending" fill="#f59e0b" /></BarChart></ResponsiveContainer>
-                        </div>
+                        <div className="bg-white p-6 rounded-xl shadow-lg"><h3 className="text-xl font-semibold mb-4">Overview</h3><ResponsiveContainer width="100%" height={300}><PieChart><Pie data={reportsData.financialOverview} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} fill="#8884d8" label>{reportsData.financialOverview.map((e, i) => <Cell key={`cell-${i}`} fill={COLORS[i % COLORS.length]} />)}</Pie><Tooltip /><Legend /></PieChart></ResponsiveContainer></div>
+                        <div className="bg-white p-6 rounded-xl shadow-lg"><h3 className="text-xl font-semibold mb-4">Pending by Class</h3><ResponsiveContainer width="100%" height={300}><BarChart data={reportsData.classWisePending}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="name" /><YAxis /><Tooltip /><Legend /><Bar dataKey="pending" fill="#f59e0b" /></BarChart></ResponsiveContainer></div>
                     </div>
                 </div>
             );
@@ -1362,55 +994,24 @@
             const { students } = useData();
             const { addToast } = useToast();
             const [date, setDate] = useState(formatISODateToYMD(new Date().toISOString()));
-            
-            const data = useMemo(() => {
-                const txns = [];
-                const target = new Date(date);
-                target.setHours(0,0,0,0);
-                let collected = 0, discounted = 0;
+            const txns = useMemo(() => {
+                const res = [];
+                const target = new Date(date).toDateString();
                 students.forEach(s => {
-                    s.payments.forEach(p => {
-                        const pd = new Date(p.date);
-                        if (pd.toDateString() === target.toDateString()) { txns.push({...p, studentName: s.name, rollNumber: s.rollNumber, type: 'Payment', details: p.remarks}); collected += p.amount; }
-                    });
-                    s.discounts.forEach(d => {
-                        const dd = new Date(d.date);
-                        if (dd.toDateString() === target.toDateString()) { txns.push({...d, studentName: s.name, rollNumber: s.rollNumber, type: 'Discount', details: d.reason}); discounted += d.amount; }
-                    });
+                    (s.payments||[]).forEach(p => { if(new Date(p.date).toDateString()===target) res.push({...p, student:s.name, type:'Payment'}); });
+                    (s.discounts||[]).forEach(d => { if(new Date(d.date).toDateString()===target) res.push({...d, student:s.name, type:'Discount'}); });
                 });
-                return { txns, collected, discounted };
+                return res;
             }, [students, date]);
 
-            const handleExportExcel = () => {
-                if (data.txns.length === 0) return addToast("No data to export", ToastType.Info);
-                exportDailyReportToExcel(data.txns, date);
-                addToast("Exported to Excel!", ToastType.Success);
-            };
-
-            const handleExportPdf = () => {
-                if (data.txns.length === 0) return addToast("No data to export", ToastType.Info);
-                const summary = { totalCollected: data.collected, totalDiscounted: data.discounted };
-                exportDailyReportToPdf(data.txns, date, summary);
-                addToast("Exported to PDF!", ToastType.Success);
-            };
+            const handleExportExcel = () => exportExcel(txns, "Daily", `daily_${date}.xlsx`, addToast);
+            const handleExportPdf = () => { const doc = new jsPDF(); doc.text(`Daily Report ${date}`, 14, 15); autoTable(doc, {head:[['Student','Type','Amount']], body:txns.map(t=>[t.student,t.type,t.amount]), startY:20}); doc.save(`daily_${date}.pdf`); addToast("PDF Exported", ToastType.Success); };
 
             return (
                 <div className="container mx-auto p-4 sm:p-8">
-                    <div className="flex justify-between items-center mb-6">
-                        <h2 className="text-3xl font-bold">Daily Report</h2>
-                        <div className="flex gap-2">
-                            <button onClick={handleExportExcel} className="bg-sky-600 text-white px-3 py-2 rounded flex items-center"><Download size={18} className="mr-2"/> Excel</button>
-                            <button onClick={handleExportPdf} className="bg-teal-600 text-white px-3 py-2 rounded flex items-center"><FileDown size={18} className="mr-2"/> PDF</button>
-                        </div>
-                    </div>
-                    <div className="bg-white p-6 rounded-xl shadow-lg mb-6 flex items-center gap-4"><label>Select Date:</label><input type="date" value={date} onChange={e => setDate(e.target.value)} className="border p-2 rounded" /></div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-                         <div className="bg-white p-6 rounded-xl shadow-lg"><p className="text-slate-500">Collected Today</p><p className="text-2xl font-bold text-emerald-600">₹{data.collected}</p></div>
-                         <div className="bg-white p-6 rounded-xl shadow-lg"><p className="text-slate-500">Discounted Today</p><p className="text-2xl font-bold text-amber-600">₹{data.discounted}</p></div>
-                    </div>
-                    <div className="bg-white p-6 rounded-xl shadow-lg"><h3 className="font-bold mb-4">Transactions</h3>
-                        <table className="min-w-full"><thead><tr><th className="text-left p-2">Student</th><th className="text-left p-2">Type</th><th className="text-right p-2">Amount</th></tr></thead><tbody>{data.txns.map((t, i) => <tr key={i} className="border-t"><td className="p-2">{t.studentName}</td><td className="p-2">{t.type}</td><td className="p-2 text-right">₹{t.amount}</td></tr>)}</tbody></table>
-                    </div>
+                    <div className="flex justify-between items-center mb-6"><h2 className="text-3xl font-bold">Daily Report</h2><div className="flex gap-2"><button onClick={handleExportExcel} className="bg-sky-600 text-white px-3 py-2 rounded flex"><Download size={18} className="mr-2"/> Excel</button><button onClick={handleExportPdf} className="bg-teal-600 text-white px-3 py-2 rounded flex"><FileDown size={18} className="mr-2"/> PDF</button></div></div>
+                    <div className="bg-white p-6 rounded-xl shadow-lg mb-6 inline-block"><input type="date" value={date} onChange={e=>setDate(e.target.value)} className="border p-2 rounded"/></div>
+                    <div className="bg-white p-6 rounded-xl shadow-lg"><table className="min-w-full"><thead><tr><th className="text-left p-2">Student</th><th className="text-left p-2">Type</th><th className="text-right p-2">Amount</th></tr></thead><tbody>{txns.map((t, i) => <tr key={i} className="border-t"><td className="p-2">{t.student}</td><td className="p-2">{t.type}</td><td className="p-2 text-right">₹{t.amount}</td></tr>)}</tbody></table></div>
                 </div>
             );
         };
@@ -1418,206 +1019,112 @@
         const MonthlyReportPage = () => {
             const { students } = useData();
             const { addToast } = useToast();
-            const [month, setMonth] = useState(new Date().getMonth());
-            const [year, setYear] = useState(new Date().getFullYear());
-            
-            const data = useMemo(() => {
-                const days = new Date(year, month + 1, 0).getDate();
-                const daily = Array.from({length: days}, (_, i) => ({ day: i + 1, collected: 0 }));
+            const [m, setM] = useState(new Date().getMonth());
+            const [y, setY] = useState(new Date().getFullYear());
+            const d = useMemo(() => {
+                const res = Array.from({length: new Date(y, m+1, 0).getDate()}, (_, i) => ({ day: i+1, val: 0 }));
                 let total = 0;
-                let totalDisc = 0;
-                students.forEach(s => {
-                    s.payments.forEach(p => {
-                        const d = new Date(p.date);
-                        if (d.getMonth() === month && d.getFullYear() === year) {
-                            daily[d.getDate() - 1].collected += p.amount;
-                            total += p.amount;
-                        }
-                    });
-                    s.discounts.forEach(d => {
-                        const dd = new Date(d.date);
-                        if (dd.getMonth() === month && dd.getFullYear() === year) totalDisc += d.amount;
-                    });
-                });
-                return { daily, total, totalDisc };
-            }, [students, month, year]);
+                students.forEach(s => (s.payments||[]).forEach(p => { const dt = new Date(p.date); if(dt.getMonth()===m && dt.getFullYear()===y) { res[dt.getDate()-1].val+=p.amount; total+=p.amount; } }));
+                return { daily: res, total };
+            }, [students, m, y]);
 
-            const handleExportExcel = () => {
-                if (data.total === 0 && data.totalDisc === 0) return addToast("No data to export", ToastType.Info);
-                const summary = { totalCollected: data.total, totalDiscounted: data.totalDisc };
-                exportMonthlyReportToExcel(data.daily, `${month + 1}-${year}`, summary);
-                addToast("Exported to Excel!", ToastType.Success);
-            };
-
-            const handleExportPdf = () => {
-                if (data.total === 0 && data.totalDisc === 0) return addToast("No data to export", ToastType.Info);
-                const summary = { totalCollected: data.total, totalDiscounted: data.totalDisc };
-                exportMonthlyReportToPdf(data.daily, `${month + 1}-${year}`, summary);
-                addToast("Exported to PDF!", ToastType.Success);
-            };
+            const handleExportExcel = () => exportExcel(d.daily, "Monthly", `monthly_${m+1}_${y}.xlsx`, addToast);
+            const handleExportPdf = () => { const doc = new jsPDF(); doc.text(`Monthly Report ${m+1}/${y}`, 14, 15); autoTable(doc, {head:[['Day','Amount']], body:d.daily.map(r=>[r.day, r.val]), startY:20}); doc.save(`monthly_${m+1}_${y}.pdf`); addToast("PDF Exported", ToastType.Success); };
 
             return (
                 <div className="container mx-auto p-4 sm:p-8">
-                    <div className="flex justify-between items-center mb-6">
-                        <h2 className="text-3xl font-bold mb-6">Monthly Report</h2>
-                        <div className="flex gap-2">
-                            <button onClick={handleExportExcel} className="bg-sky-600 text-white px-3 py-2 rounded flex items-center"><Download size={18} className="mr-2"/> Excel</button>
-                            <button onClick={handleExportPdf} className="bg-teal-600 text-white px-3 py-2 rounded flex items-center"><FileDown size={18} className="mr-2"/> PDF</button>
-                        </div>
-                    </div>
-                    <div className="bg-white p-6 rounded-xl shadow-lg mb-6 flex gap-4">
-                        <select value={month} onChange={e => setMonth(Number(e.target.value))} className="border p-2 rounded">{['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'].map((m, i) => <option key={i} value={i}>{m}</option>)}</select>
-                        <select value={year} onChange={e => setYear(Number(e.target.value))} className="border p-2 rounded">{[2023, 2024, 2025, 2026].map(y => <option key={y} value={y}>{y}</option>)}</select>
-                    </div>
-                    <div className="bg-white p-6 rounded-xl shadow-lg mb-6"><p>Total Collected: <span className="font-bold text-emerald-600 text-xl">₹{data.total}</span></p></div>
-                    <div className="bg-white p-6 rounded-xl shadow-lg h-80">
-                        <ResponsiveContainer width="100%" height="100%"><BarChart data={data.daily}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="day" /><YAxis /><Tooltip /><Bar dataKey="collected" fill="#10b981" /></BarChart></ResponsiveContainer>
-                    </div>
+                    <div className="flex justify-between items-center mb-6"><h2 className="text-3xl font-bold">Monthly Report</h2><div className="flex gap-2"><button onClick={handleExportExcel} className="bg-sky-600 text-white px-3 py-2 rounded flex"><Download size={18} className="mr-2"/> Excel</button><button onClick={handleExportPdf} className="bg-teal-600 text-white px-3 py-2 rounded flex"><FileDown size={18} className="mr-2"/> PDF</button></div></div>
+                    <div className="flex gap-4 mb-6"><select value={m} onChange={e=>setM(Number(e.target.value))} className="border p-2 rounded">{['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'].map((n,i)=><option key={i} value={i}>{n}</option>)}</select><select value={y} onChange={e=>setY(Number(e.target.value))} className="border p-2 rounded">{[2023,2024,2025,2026].map(x=><option key={x} value={x}>{x}</option>)}</select></div>
+                    <div className="bg-white p-6 rounded-xl shadow-lg mb-6"><p className="text-xl">Total: <span className="font-bold text-emerald-600">₹{d.total}</span></p></div>
+                    <div className="bg-white p-6 rounded-xl shadow-lg h-80"><ResponsiveContainer width="100%" height="100%"><BarChart data={d.daily}><CartesianGrid strokeDasharray="3 3"/><XAxis dataKey="day"/><YAxis/><Tooltip/><Bar dataKey="val" fill="#10b981"/></BarChart></ResponsiveContainer></div>
                 </div>
             );
         };
 
         const UserManagementPage = () => {
-            const { users, addUser, deleteUser, updateUserPermissions } = useData();
+            const { users, addUser, deleteUser, updateUserPermissions, updateUserRole } = useData();
             const { addToast } = useToast();
-            const [email, setEmail] = useState('');
-            const [password, setPassword] = useState('');
-            const [confirmPassword, setConfirmPassword] = useState('');
-            const [editingPermissionsUser, setEditingPermissionsUser] = useState(null);
-            
-            const handleAdd = (e) => {
+            const [form, setForm] = useState({ email: '', pass: '', confirm: '' });
+            const [editUser, setEditUser] = useState(null);
+            const [roleToggleUser, setRoleToggleUser] = useState(null);
+            const [showPass, setShowPass] = useState({});
+
+            const handleAdd = async (e) => {
                 e.preventDefault();
-                if (password !== confirmPassword) {
-                    addToast("Passwords do not match", ToastType.Error);
-                    return;
-                }
-                if(addUser({email, password})) { 
-                    setEmail(''); 
-                    setPassword(''); 
-                    setConfirmPassword('');
-                    addToast("User added successfully", ToastType.Success);
-                } else {
-                    addToast("User already exists", ToastType.Error);
+                if(form.pass !== form.confirm) return addToast("Passwords do not match", ToastType.Error);
+                const success = await addUser({ email: form.email, password: form.pass });
+                if(success) { setForm({email:'',pass:'',confirm:''}); addToast("User added", ToastType.Success); } else addToast("User exists or Error", ToastType.Error);
+            };
+
+            const confirmRoleToggle = () => {
+                if (roleToggleUser) {
+                    const newRole = roleToggleUser.role === 'admin' ? 'user' : 'admin';
+                    updateUserRole(roleToggleUser.email, newRole);
+                    addToast(`Updated role to ${newRole.toUpperCase()}`, ToastType.Success);
+                    setRoleToggleUser(null);
                 }
             };
 
             return (
                  <div className="container mx-auto p-8">
                     <h2 className="text-2xl font-bold mb-6">User Management</h2>
-                    <div className="bg-white p-6 rounded-xl shadow-lg mb-8">
-                        <h3 className="font-bold mb-4">Add User</h3>
-                        <form onSubmit={handleAdd} className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
-                            <div><label className="block text-sm">Email</label><input type="email" value={email} onChange={e => setEmail(e.target.value)} className="border rounded p-2 w-full" required /></div>
-                            <div><label className="block text-sm">Password</label><input type="password" value={password} onChange={e => setPassword(e.target.value)} className="border rounded p-2 w-full" required /></div>
-                            <div><label className="block text-sm">Confirm Password</label><input type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} className="border rounded p-2 w-full" required /></div>
-                            <button className="bg-indigo-600 text-white px-4 py-2 rounded">Add User</button>
-                        </form>
-                    </div>
-                    <div className="bg-white p-6 rounded-xl shadow-lg">
-                        <table className="min-w-full text-left">
-                            <thead>
-                                <tr className="border-b">
-                                    <th className="p-3">Email</th>
-                                    <th className="p-3">Role</th>
-                                    <th className="p-3">Permissions</th>
-                                    <th className="p-3">Action</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {users.map(u => (
-                                    <tr key={u.email} className="border-b hover:bg-slate-50">
-                                        <td className="p-3">{u.email}</td>
-                                        <td className="p-3"><span className={`px-2 py-1 rounded text-xs font-bold ${u.role === 'admin' ? 'bg-purple-100 text-purple-800' : 'bg-gray-100 text-gray-800'}`}>{u.role.toUpperCase()}</span></td>
-                                        <td className="p-3">
-                                            <button onClick={() => setEditingPermissionsUser(u)} className="text-indigo-600 hover:text-indigo-800 flex items-center text-sm">
-                                                <Unlock size={16} className="mr-1"/> Edit Permissions
-                                            </button>
-                                        </td>
-                                        <td className="p-3">
-                                            {u.role !== 'admin' && <button onClick={() => deleteUser(u.email)} className="text-red-500 hover:text-red-700" title="Delete User"><Trash2 size={18}/></button>}
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                    
-                    <PermissionsModal 
-                        isOpen={!!editingPermissionsUser} 
-                        user={editingPermissionsUser} 
-                        onClose={() => setEditingPermissionsUser(null)} 
-                        onSave={(email, perms) => {
-                            updateUserPermissions(email, perms);
-                            addToast("Permissions updated", ToastType.Success);
-                        }}
-                    />
+                    <div className="bg-white p-6 rounded-xl shadow-lg mb-8"><h3 className="font-bold mb-4">Add User</h3><form onSubmit={handleAdd} className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end"><input placeholder="Email" className="border p-2 rounded" value={form.email} onChange={e=>setForm({...form, email:e.target.value})} required/><input type="password" placeholder="Password" className="border p-2 rounded" value={form.pass} onChange={e=>setForm({...form, pass:e.target.value})} required/><input type="password" placeholder="Confirm" className="border p-2 rounded" value={form.confirm} onChange={e=>setForm({...form, confirm:e.target.value})} required/><button className="bg-indigo-600 text-white px-4 py-2 rounded">Add</button></form></div>
+                    <div className="bg-white p-6 rounded-xl shadow-lg"><table className="min-w-full text-left"><thead><tr className="border-b"><th className="p-3">Email</th><th className="p-3">Password</th><th className="p-3">Role</th><th className="p-3">Permissions</th><th className="p-3">Action</th></tr></thead><tbody>
+                        {users.map((u, i) => (
+                            <tr key={u.email} className="border-b hover:bg-slate-50">
+                                <td className="p-3">{u.email}</td>
+                                <td className="p-3 font-mono flex items-center gap-2"><span>{showPass[i]?u.password:'••••••'}</span><button onClick={()=>setShowPass(p=>({...p, [i]:!p[i]}))}><Eye size={16} className="text-gray-400"/></button></td>
+                                <td className="p-3">
+                                    <span className={`px-2 py-1 rounded text-xs font-bold ${u.role==='admin'?'bg-purple-100 text-purple-800':'bg-gray-100'}`}>{u.role.toUpperCase()}</span> 
+                                    <button onClick={() => setRoleToggleUser(u)} className="text-amber-500 ml-2 hover:text-amber-700" title="Toggle Role"><Key size={16}/></button>
+                                </td>
+                                <td className="p-3"><button onClick={()=>setEditUser(u)} className="text-indigo-600 flex items-center text-sm hover:text-indigo-800"><Unlock size={16} className="mr-1"/> Edit</button></td>
+                                <td className="p-3">{u.role!=='admin' && <button onClick={()=>{if(confirm('Delete?')) deleteUser(u.email)}} className="text-red-500 hover:text-red-700"><Trash2 size={18}/></button>}</td>
+                            </tr>
+                        ))}
+                    </tbody></table></div>
+                    <PermissionsModal isOpen={!!editUser} user={editUser} onClose={()=>setEditUser(null)} onSave={(e,p)=>{updateUserPermissions(e,p); addToast("Permissions Updated", ToastType.Success)}}/>
+                    <ConfirmationModal isOpen={!!roleToggleUser} onClose={()=>setRoleToggleUser(null)} onConfirm={confirmRoleToggle} title="Change User Role" message={`Are you sure you want to change ${roleToggleUser?.email}'s role to ${roleToggleUser?.role === 'admin' ? 'User' : 'Admin'}?`} />
                  </div>
             );
         };
-        
+
         const AccountSettingsPage = () => {
             const { loggedInUser } = useAuth();
-            const { updateUserPassword, addToast } = useData();
-            const [curr, setCurr] = useState('');
-            const [newP, setNewP] = useState('');
-            
-            const handleUpdate = (e) => {
-                e.preventDefault();
-                const res = updateUserPassword(loggedInUser.email, curr, newP);
-                if(res.success) { addToast("Password updated", ToastType.Success); setCurr(''); setNewP(''); }
-                else addToast(res.message, ToastType.Error);
-            };
-
+            const { updateUserPassword, addToast } = { ...useData(), ...useToast() };
+            const [f, setF] = useState({ cur: '', new: '' });
+            const sub = async (e) => { e.preventDefault(); const r = await updateUserPassword(loggedInUser.email, f.cur, f.new); if(r.success) { addToast("Updated", ToastType.Success); setF({cur:'',new:''}); } else addToast(r.message, ToastType.Error); };
             return (
-                <div className="container mx-auto p-8">
-                    <h2 className="text-2xl font-bold mb-6">Account Settings</h2>
-                    <div className="bg-white p-6 rounded-xl shadow-lg max-w-md">
-                        <form onSubmit={handleUpdate} className="space-y-4">
-                            <div><label className="block text-sm">Current Password</label><input type="password" value={curr} onChange={e => setCurr(e.target.value)} className="border rounded w-full p-2" required /></div>
-                            <div><label className="block text-sm">New Password</label><input type="password" value={newP} onChange={e => setNewP(e.target.value)} className="border rounded w-full p-2" required /></div>
-                            <button className="bg-indigo-600 text-white px-4 py-2 rounded w-full">Update Password</button>
-                        </form>
-                    </div>
-                </div>
+                <div className="container mx-auto p-8"><h2 className="text-2xl font-bold mb-6">Account Settings</h2><div className="bg-white p-6 rounded-xl shadow-lg max-w-md"><form onSubmit={sub} className="space-y-4"><input type="password" placeholder="Current Password" className="w-full border p-2 rounded" value={f.cur} onChange={e=>setF({...f, cur:e.target.value})} required/><input type="password" placeholder="New Password" className="w-full border p-2 rounded" value={f.new} onChange={e=>setF({...f, new:e.target.value})} required/><button className="w-full bg-indigo-600 text-white px-4 py-2 rounded">Update</button></form></div></div>
             );
         };
 
         const NotFoundPage = () => <div className="flex flex-col items-center justify-center min-h-screen"><h1 className="text-6xl font-bold text-indigo-600">404</h1><p className="text-2xl mt-4">Page Not Found</p><Link to="/" className="mt-4 text-indigo-600 underline">Go Home</Link></div>;
 
-        // --- APP ---
-        const App = () => {
-            return (
-                <AppProvider>
-                    <HashRouter>
-                        <ToastContainer />
-                        <Routes>
-                            <Route path="/login" element={<LoginPage />} />
-                            <Route path="/" element={<ProtectedRoute><MainLayout /></ProtectedRoute>}>
-                                <Route index element={<DashboardPage />} />
-                                <Route path="student/new" element={<ProtectedRoute requiredPermission="canAddStudents"><StudentAddPage /></ProtectedRoute>} />
-                                <Route path="student/:id" element={<ProtectedRoute requiredPermission="canViewStudents"><StudentDetailPage /></ProtectedRoute>} />
-                                <Route path="student/:id/edit" element={<ProtectedRoute requiredPermission="canEditStudents"><StudentEditPage /></ProtectedRoute>} />
-                                <Route path="reports" element={<ProtectedRoute requiredPermission="canViewReports"><Outlet/></ProtectedRoute>}>
-                                    <Route path="summary" element={<ReportsPage />} />
-                                    <Route path="daily" element={<DailyReportPage />} />
-                                    <Route path="monthly" element={<MonthlyReportPage />} />
-                                </Route>
-                                <Route path="admin" element={<ProtectedRoute requiredPermission="canManageUsers"><Outlet/></ProtectedRoute>}>
-                                     <Route path="users" element={<UserManagementPage />} />
-                                     <Route path="settings" element={<AccountSettingsPage />} />
-                                </Route>
-                            </Route>
-                            <Route path="*" element={<NotFoundPage />} />
-                        </Routes>
-                    </HashRouter>
-                </AppProvider>
-            );
-        };
+        const App = () => (
+            <AppProvider>
+                <HashRouter>
+                    <ToastContainer/>
+                    <Routes>
+                        <Route path="/login" element={<LoginPage/>}/>
+                        <Route path="/" element={<ProtectedRoute><MainLayout/></ProtectedRoute>}>
+                            <Route index element={<DashboardPage/>}/>
+                            <Route path="admin/users" element={<UserManagementPage/>}/>
+                            <Route path="admin/settings" element={<AccountSettingsPage/>}/>
+                            <Route path="student/new" element={<StudentAddPage/>}/>
+                            <Route path="student/:id" element={<StudentDetailPage/>}/>
+                            <Route path="student/:id/edit" element={<StudentEditPage/>}/>
+                            <Route path="reports/summary" element={<ReportsPage/>}/>
+                            <Route path="reports/daily" element={<DailyReportPage/>}/>
+                            <Route path="reports/monthly" element={<MonthlyReportPage/>}/>
+                        </Route>
+                        <Route path="*" element={<NotFoundPage/>}/>
+                    </Routes>
+                </HashRouter>
+            </AppProvider>
+        );
 
-        const root = createRoot(document.getElementById('root'));
-        root.render(<App />);
+        createRoot(document.getElementById('root')).render(<App/>);
     </script>
 </body>
-
 </html>
-
